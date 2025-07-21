@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Contrôle Matériel Médical</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: auto;
+            padding: 1rem;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        label,
+        select {
+            display: block;
+            margin-top: 1rem;
+            font-weight: bold;
+        }
+
+        .questions {
+            margin-top: 1rem;
+        }
+
+        .question {
+            margin-bottom: 1.5rem;
+        }
+
+        .buttons-choices button {
+            font-size: 1.2rem;
+            padding: 0.5rem 1rem;
+            margin-right: 1rem;
+            border-radius: 5px;
+            border: 1px solid #888;
+            cursor: pointer;
+        }
+
+        .buttons-choices button.selected {
+            background-color: #4caf50;
+            color: white;
+            border-color: #4caf50;
+        }
+
+        input[type="file"] {
+            margin-top: 0.5rem;
+        }
+
+        img.preview {
+            max-width: 100%;
+            margin-top: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .notes_container {
+            display: none;
+        }
+
+        .notes_container textarea {
+            width: 100%;
+            height: 20vh;
+        }
+
+        #btnSummary {
+            margin-top: 2rem;
+            width: 100%;
+            font-size: 1.3rem;
+            padding: 0.8rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        #btnSummary:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
+        }
+
+        /* --- Modale styles --- */
+        #modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #00000088;
+            z-index: 1000;
+        }
+
+        #modal > div {
+            background: white;
+            margin: 5% auto;
+            padding: 1rem;
+            max-width: 600px;
+            height: 90%;
+            overflow-y: auto;
+            border-radius: 8px;
+            position: relative;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        #closeModal {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            font-size: 1.2rem;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+        }
+
+        #modal button {
+            margin: 0.5rem;
+            padding: 0.6rem 1rem;
+            font-size: 1rem;
+            cursor: pointer;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            background-color: #f0f0f0;
+            transition: background-color 0.2s;
+        }
+
+        #modal button:hover {
+            background-color: #ddd;
+        }
+
+        /* Pour que les images dans le résumé prennent toute la largeur max */
+        #modalContent img {
+            max-width: 100%;
+            margin-top: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        /* Titres dans le résumé */
+        #modalContent h1, #modalContent h2 {
+            text-align: center;
+            margin-top: 1rem;
+        }
+
+        #modalContent .question-summary {
+            margin-bottom: 1rem;
+        }
+
+        #modalContent .label {
+            font-weight: bold;
+            margin-top: 1rem;
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Contrôle Matériel Médical</h1>
+
+    <label for="typeMateriel">Choisir le type de matériel :</label>
+    <select id="typeMateriel" required>
+        <option value="">-- Sélectionner --</option>
+        <option value="lit">Lit médicalisé</option>
+        <option value="fauteuil_manuel">Fauteuil roulant manuel</option>
+        <option value="fauteuil_electrique">Fauteuil roulant électrique</option>
+        <option value="leve_personne">Lève-personne / verticalisateur</option>
+        <option value="autre">Autre</option>
+    </select>
+
+    <div id="questionsContainer" class="questions"></div>
+
+    <div class="notes_container" id="notes_container">
+        <label for="notes">Notes :</label>
+        <textarea name="notes" id="notes"></textarea>
+    </div>
+
+    <div id="photosContainer" style="margin-top:1.5rem; display:none;">
+        <label>Photo de l'ensemble :</label>
+        <input type="file" accept="image/*" capture="environment" id="photoEnsemble" />
+        <img id="previewEnsemble" class="preview" alt="Aperçu photo ensemble" />
+
+        <label>Photo de l'étiquette (n° de série) :</label>
+        <input type="file" accept="image/*" capture="environment" id="photoEtiquette" />
+        <img id="previewEtiquette" class="preview" alt="Aperçu photo étiquette" />
+    </div>
+
+    <button id="btnSummary" disabled>Voir résumé & Partager</button>
+
+    <!-- Modale résumé -->
+    <div id="modal">
+        <div>
+            <button id="closeModal" title="Fermer la fenêtre">✖️</button>
+            <div id="modalContent"></div>
+            <div style="text-align:center; margin-top:1.5rem;">
+                <button id="btnModalPrint">🖨️ Imprimer</button>
+                <button id="btnModalDownload">⬇️ Télécharger</button>
+                <button id="btnModalShare">📤 Partager</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Questions générales oui/non
+        const questionsOuiNon = [
+            "Le produit est-il en bon état et est-il complet (produit et accessoires) ?",
+            "Le produit présente-t-il des détériorations ou des faiblesses de n'importe quel type ?",
+            "Le produit fonctionne-t-il correctement sous charge nominale ?",
+            "Le produit est-il complètement fonctionnel conformément au manuel d'utilisation ?",
+            "Tous les défauts trouvés ont-ils été éliminés et tous les composants défectueux ont-ils été remplacés ?",
+            "Tous les boulons/vis sont-ils fixés correctement et le produit est-il monté correctement ?",
+            "Le produit est-il techniquement et fonctionnellement sûr ?",
+            "Le produit a-t-il été nettoyé et désinfecté ?",
+            "L'autocollant d'identification est-il facilement lisible et est-il fermement apposé sur le produit ?"
+        ];
+
+        // Questions état du produit par type matériel (exemple lit, fauteuil manuel)
+        const etatElements = {
+            lit: [
+                "Barrières",
+                "Potence",
+                "Tête et pied de lit",
+                "Châssis",
+                "Moteur"
+            ],
+            fauteuil_manuel: [
+                "Roues",
+                "Accoudoirs",
+                "Freins",
+                "Repose-pieds",
+                "Toiles (assise et dossier)",
+                "Châssis"
+            ],
+            fauteuil_electrique: [
+                "Roues",
+                "Accoudoirs",
+                "Freins",
+                "Repose-pieds",
+                "Toiles (assise et dossier)",
+                "Châssis",
+                "Batterie",
+                "Moteur"
+            ],
+            leve_personne: [
+                "Structure",
+                "Sangles",
+                "Moteur",
+                "Commande",
+                "Roues"
+            ],
+            autre: [
+                "État général des éléments"
+            ]
+        };
+
+        const typeSelect = document.getElementById('typeMateriel');
+        const questionsContainer = document.getElementById('questionsContainer');
+        const btnSummary = document.getElementById('btnSummary');
+        const notesContainer = document.getElementById('notes_container');
+        const notes = document.getElementById('notes');
+        const photosContainer = document.getElementById('photosContainer');
+        const photoEnsembleInput = document.getElementById('photoEnsemble');
+        const photoEtiquetteInput = document.getElementById('photoEtiquette');
+        const previewEnsemble = document.getElementById('previewEnsemble');
+        const previewEtiquette = document.getElementById('previewEtiquette');
+
+        let answers = {}; // stocke réponses des questions
+        let etatAnswers = {}; // stocke réponses état éléments
+        let photosData = { ensemble: null, etiquette: null };
+
+        // Crée les boutons oui/non
+        function createYesNoButtons(questionId, container) {
+            const btnsDiv = document.createElement('div');
+            btnsDiv.className = 'buttons-choices';
+
+            ['Oui', 'Non'].forEach(text => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = text;
+                btn.addEventListener('click', () => {
+                    answers[questionId] = text;
+                    // décocher les autres
+                    Array.from(btnsDiv.children).forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    checkAllAnswered();
+                });
+                btnsDiv.appendChild(btn);
+            });
+            container.appendChild(btnsDiv);
+        }
+
+        // Crée les boutons état : bon/moyen/mauvais
+        function createEtatButtons(elementId, container) {
+            const btnsDiv = document.createElement('div');
+            btnsDiv.className = 'buttons-choices';
+
+            ['Bon (RAS)', 'Moyen (Entretien)', 'Mauvais (HS)'].forEach(text => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = text;
+                btn.addEventListener('click', () => {
+                    etatAnswers[elementId] = text;
+                    Array.from(btnsDiv.children).forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    checkAllAnswered();
+                });
+                btnsDiv.appendChild(btn);
+            });
+            container.appendChild(btnsDiv);
+        }
+
+        // Affiche les questions + état en fonction du matériel
+        typeSelect.addEventListener('change', () => {
+            answers = {};
+            etatAnswers = {};
+            btnSummary.disabled = true;
+            questionsContainer.innerHTML = '';
+            notesContainer.style.display = 'none';
+            photosContainer.style.display = 'none';
+            previewEnsemble.src = '';
+            previewEtiquette.src = '';
+            photosData = { ensemble: null, etiquette: null };
+
+            const type = typeSelect.value;
+            if (!type) return;
+
+            // Questions oui/non
+            questionsOuiNon.forEach((q, i) => {
+                const qid = `q${i}`;
+                const div = document.createElement('div');
+                div.className = 'question';
+                const p = document.createElement('p');
+                p.textContent = q;
+                div.appendChild(p);
+                createYesNoButtons(qid, div);
+                questionsContainer.appendChild(div);
+            });
+
+            // Questions état
+            if (etatElements[type]) {
+                etatElements[type].forEach((element, i) => {
+                    const eid = `etat${i}`;
+                    const div = document.createElement('div');
+                    div.className = 'question';
+                    const p = document.createElement('p');
+                    p.textContent = element;
+                    div.appendChild(p);
+                    createEtatButtons(eid, div);
+                    questionsContainer.appendChild(div);
+                });
+            }
+
+            notesContainer.style.display = 'block';
+            photosContainer.style.display = 'block';
+        });
+
+        // Preview photos
+        photoEnsembleInput.addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    previewEnsemble.src = reader.result;
+                    photosData.ensemble = reader.result;
+                    checkAllAnswered();
+                };
+                reader.readAsDataURL(file);
+            } else {
+                previewEnsemble.src = '';
+                photosData.ensemble = null;
+                checkAllAnswered();
+            }
+        });
+
+        photoEtiquetteInput.addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    previewEtiquette.src = reader.result;
+                    photosData.etiquette = reader.result;
+                    checkAllAnswered();
+                };
+                reader.readAsDataURL(file);
+            } else {
+                previewEtiquette.src = '';
+                photosData.etiquette = null;
+                checkAllAnswered();
+            }
+        });
+
+        // Vérifie que toutes les questions ont une réponse + photos sélectionnées
+        function checkAllAnswered() {
+            // Tous les oui/non doivent avoir une réponse
+            const qOk = questionsOuiNon.length === Object.keys(answers).length;
+
+            // Tous les états doivent avoir une réponse
+            const type = typeSelect.value;
+            const etatCount = etatElements[type] ? etatElements[type].length : 0;
+            const etatOk = etatCount === Object.keys(etatAnswers).length;
+
+            // Photos obligatoires
+            const photosOk = photosData.ensemble !== null && photosData.etiquette !== null;
+
+            btnSummary.disabled = !(qOk && etatOk && photosOk);
+        }
+
+        const modal = document.getElementById('modal');
+        const modalContent = document.getElementById('modalContent');
+        const closeModal = document.getElementById('closeModal');
+        const btnModalPrint = document.getElementById('btnModalPrint');
+        const btnModalDownload = document.getElementById('btnModalDownload');
+        const btnModalShare = document.getElementById('btnModalShare');
+
+        // Génère le résumé HTML
+        function generateSummaryHTML() {
+            const type = typeSelect.options[typeSelect.selectedIndex].text;
+            const dt = new Date();
+            const dateStr = dt.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' });
+
+            let html = `
+                <h1>Rapport de contrôle - ${type}</h1>
+                <p>Date: ${dateStr}</p>
+                <hr />
+                <h2>Questions générales</h2>
+            `;
+
+            questionsOuiNon.forEach((q, i) => {
+                const qid = `q${i}`;
+                const rep = answers[qid] || "Non répondu";
+                html += `<div class="question-summary"><strong>${q}</strong><br>Réponse : ${rep}</div>`;
+            });
+
+            html += `<hr /><h2>État des éléments</h2>`;
+            const typeKey = typeSelect.value;
+            if (etatElements[typeKey]) {
+                etatElements[typeKey].forEach((el, i) => {
+                    const eid = `etat${i}`;
+                    const rep = etatAnswers[eid] || "Non renseigné";
+                    html += `<div class="question-summary"><strong>${el}</strong><br>État : ${rep}</div>`;
+                });
+            }
+
+            html += `<hr /><h2>Notes</h2><p>${notes.value.trim() ? notes.value.trim().replace(/\n/g, "<br>") : "Aucune note"}</p>`;
+
+            html += `<hr /><h2>Photos</h2>`;
+            if (photosData.ensemble) {
+                html += `<p><strong>Photo de l'ensemble :</strong><br><img src="${photosData.ensemble}" alt="Photo de l'ensemble" /></p>`;
+            } else {
+                html += `<p><strong>Photo de l'ensemble :</strong> Non fournie</p>`;
+            }
+            if (photosData.etiquette) {
+                html += `<p><strong>Photo de l'étiquette :</strong><br><img src="${photosData.etiquette}" alt="Photo de l'étiquette" /></p>`;
+            } else {
+                html += `<p><strong>Photo de l'étiquette :</strong> Non fournie</p>`;
+            }
+
+            return html;
+        }
+
+        // Ouvre la modale avec le résumé
+        btnSummary.addEventListener('click', () => {
+            const html = generateSummaryHTML();
+            modalContent.innerHTML = html;
+            modal.style.display = 'block';
+
+            // Pour utiliser dans les fonctions print/download/share
+            modalContent.dataset.html = html;
+        });
+
+        // Fermer modale
+        closeModal.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+
+        // Imprimer le contenu de la modale
+        btnModalPrint.addEventListener('click', () => {
+            const html = modalContent.dataset.html || '';
+            const printWindow = window.open('', '', 'width=800,height=600');
+            printWindow.document.write(`
+                <html><head><title>Impression Rapport</title><meta charset="UTF-8" />
+                <style>body{font-family:Arial,sans-serif; max-width:600px; margin:auto; padding:1rem;}
+                img{max-width:100%; margin-top:0.5rem; border:1px solid #ccc; border-radius:5px;}
+                h1,h2{text-align:center;}</style>
+                </head><body>${html}
+            `);
+            printWindow.document.close();
+            printWindow.focus();
+            printWindow.print();
+            printWindow.close();
+        });
+
+        // Télécharger le résumé HTML
+        btnModalDownload.addEventListener('click', () => {
+            const html = modalContent.dataset.html || '';
+            const blob = new Blob([html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'rapport_controle.html';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // Partager via Web Share API
+        btnModalShare.addEventListener('click', async () => {
+            const html = modalContent.dataset.html || '';
+            const blob = new Blob([html], { type: 'text/html' });
+            const file = new File([blob], 'rapport_controle.html', { type: 'text/html' });
+
+            try {
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: 'Rapport de contrôle',
+                        text: 'Voici le rapport de retour matériel médical.',
+                        files: [file]
+                    });
+                } else {
+                    alert("Le partage n’est pas supporté sur ce navigateur.");
+                }
+            } catch (err) {
+                alert("Échec du partage : " + err.message);
+            }
+        });
+
+        // Fermer modale au clic hors contenu
+        window.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+    </script>
+
+</body>
+
+</html>
