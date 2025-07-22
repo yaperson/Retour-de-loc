@@ -499,7 +499,7 @@
 
 btnModalDownload.addEventListener('click', async () => {
     try {
-        // S'assurer que toutes les images sont chargées avant export
+        // S'assurer que toutes les images sont bien chargées
         const images = modalContent.querySelectorAll('img');
         for (const img of images) {
             if (!img.complete) {
@@ -510,19 +510,23 @@ btnModalDownload.addEventListener('click', async () => {
             }
         }
 
-        // Génération directe depuis le contenu affiché (sans clone)
-        await html2pdf().set({
-            margin: 10,
-            filename: 'rapport_controle.pdf',
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        }).from(modalContent).save();
+        // Générer le canvas du contenu
+        const canvas = await html2canvas(modalContent, { scale: 2, useCORS: true });
+
+        // Convertir en image PNG
+        const imageData = canvas.toDataURL('image/png');
+
+        // Créer un lien de téléchargement
+        const a = document.createElement('a');
+        a.href = imageData;
+        a.download = 'rapport_controle.png';
+        a.click();
 
     } catch (e) {
-        alert("Erreur lors du téléchargement : " + (e.message || e));
+        alert("Erreur lors du téléchargement de l’image : " + (e.message || e));
     }
 });
+
 
         // Partager via Web Share API
         // btnModalShare.addEventListener('click', async () => {
@@ -554,7 +558,7 @@ btnModalDownload.addEventListener('click', async () => {
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 title: 'Rapport visuel',
-                text: 'Voici le rapport de retour matériel médical.' + '\n' + modalContent,
+                text: 'Voici le rapport de retour matériel médical.' + '\n' + modalContent.dataset.html,
                 files: [file]
             });
         } else {
