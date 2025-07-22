@@ -201,12 +201,13 @@
             <div style="text-align:center; margin-top:1.5rem;">
                 <button id="btnModalPrint">🖨️ Imprimer</button>
                 <button id="btnModalDownload">⬇️ Télécharger</button>
+                <!-- <button id="btnModalMail">📧 Envoyer par mail</button> -->
                 <button id="btnModalShare">📤 Partager</button>
             </div>
         </div>
     </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script>
         // Questions générales oui/non
         const questionsOuiNon = [
             "Le produit est-il en bon état et est-il complet (produit et accessoires) ?",
@@ -417,6 +418,7 @@
         const btnModalPrint = document.getElementById('btnModalPrint');
         const btnModalDownload = document.getElementById('btnModalDownload');
         const btnModalShare = document.getElementById('btnModalShare');
+        const btnModalMail = document.getElementById('btnModalMail');
 
         // Génère le résumé HTML
         function generateSummaryHTML() {
@@ -496,83 +498,65 @@
             printWindow.close();
         });
 
+        // btnModalMail.addEventListener('click', () => {
 
-btnModalDownload.addEventListener('click', async () => {
-    try {
-        // S'assurer que toutes les images sont bien chargées
-        const images = modalContent.querySelectorAll('img');
-        for (const img of images) {
-            if (!img.complete) {
-                await new Promise((resolve, reject) => {
-                    img.onload = resolve;
-                    img.onerror = reject;
-                });
-            }
-        }
-
-        // Générer le canvas du contenu
-        const canvas = await html2canvas(modalContent, { scale: 2, useCORS: true });
-
-        // Convertir en image PNG
-        const imageData = canvas.toDataURL('image/png');
-
-        // Créer un lien de téléchargement
-        const a = document.createElement('a');
-        a.href = imageData;
-        a.download = 'rapport_controle.png';
-        a.click();
-
-    } catch (e) {
-        alert("Erreur lors du téléchargement de l’image : " + (e.message || e));
-    }
-});
-
-
-        // Partager via Web Share API
-        // btnModalShare.addEventListener('click', async () => {
-        //     const html = modalContent.dataset.html || '';
-        //     const blob = new Blob([html], { type: 'text/html' });
-        //     const file = new File([blob], 'rapport_controle.html', { type: 'text/html' });
-
-        //     try {
-        //         if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        //             await navigator.share({
-        //                 title: 'Rapport de contrôle',
-        //                 text: 'Voici le rapport de retour matériel médical.',
-        //                 files: [file]
-        //             });
-        //         } else {
-        //             alert("Le partage n’est pas supporté sur ce navigateur.");
-        //         }
-        //     } catch (err) {
-        //         alert("Échec du partage : " + err.message);
-        //     }
         // });
 
-        btnModalShare.addEventListener('click', async () => {
-    try {
-        const canvas = await html2canvas(modalContent, { scale: 2, useCORS: true });
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-        const file = new File([blob], 'rapport.png', { type: 'image/png' });
+        console.log(generateSummaryHTML())
 
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({
-                title: 'Rapport visuel',
-                text: 'Voici le rapport de retour matériel médical.' + '\n' + modalContent.dataset.html,
-                files: [file]
-            });
-        } else {
-            // Fallback : téléchargement
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'rapport.png';
-            link.click();
-            URL.revokeObjectURL(link.href);
-        }
-    } catch (err) {
-        alert("Erreur lors du partage : " + err.message);
-    }
-});
+        btnModalDownload.addEventListener('click', async () => {
+            try {
+                // S'assurer que toutes les images sont bien chargées
+                const images = modalContent.querySelectorAll('img');
+                for (const img of images) {
+                    if (!img.complete) {
+                        await new Promise((resolve, reject) => {
+                            img.onload = resolve;
+                            img.onerror = reject;
+                        });
+                    }
+                }
+
+                // Générer le canvas du contenu
+                const canvas = await html2canvas(modalContent, { scale: 2, useCORS: true });
+
+                // Convertir en image PNG
+                const imageData = canvas.toDataURL('image/png');
+
+                // Créer un lien de téléchargement
+                const a = document.createElement('a');
+                a.href = imageData;
+                a.download = 'rapport_controle.png';
+                a.click();
+
+            } catch (e) {
+                alert("Erreur lors du téléchargement de l’image : " + (e.message || e));
+            }
+        });
+        btnModalShare.addEventListener('click', async () => {
+            try {
+                const canvas = await html2canvas(modalContent, { scale: 2, useCORS: true });
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                const file = new File([blob], 'rapport.png', { type: 'image/png' });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: 'Rapport visuel',
+                        text: 'Voici le rapport de retour matériel médical.' + '\n' + generateSummaryHTML(),
+                        files: [file]
+                    });
+                } else {
+                    // Fallback : téléchargement
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = 'rapport.png';
+                    link.click();
+                    URL.revokeObjectURL(link.href);
+                }
+            } catch (err) {
+                alert("Erreur lors du partage : " + err.message);
+            }
+        });
 
         // Fermer modale au clic hors contenu
         window.addEventListener('click', (e) => {
