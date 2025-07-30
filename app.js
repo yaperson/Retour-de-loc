@@ -398,12 +398,24 @@ window.addEventListener('click', (e) => {
     }
 });
 
+async function getPreferredBackCamera() {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+
+    // Filtrer les caméras arrière
+    const backCameras = videoDevices.filter(d => d.label.toLowerCase().includes('back'));
+
+    // Prioriser les caméras arrière sans mention "wide" ou "ultra"
+    const preferred = backCameras.find(d => !d.label.toLowerCase().includes('wide')) || backCameras[0];
+
+    return preferred?.deviceId;
+}
 
 // Quagga - Lecture Code Bar
 let scannerActive = false;
 
-document.getElementById('btnScan').addEventListener('click', () => {
-    scannerContainer.innerHTML = ''; // Nettoie avant tout
+document.getElementById('btnScan').addEventListener('click', async () => {
+    scannerContainer.innerHTML = '';
 
     if (scannerActive) {
         Quagga.stop();
@@ -411,22 +423,25 @@ document.getElementById('btnScan').addEventListener('click', () => {
         return;
     }
 
+    const deviceId = await getPreferredBackCamera();
+
     Quagga.init({
         inputStream: {
             type: "LiveStream",
             target: scannerContainer,
             constraints: {
-                facingMode: "environment",
+                deviceId: deviceId ? { exact: deviceId } : undefined,
                 width: { min: 640 },
-                height: { min: 480 }
+                height: { min: 480 },
+                facingMode: "environment"
             },
-            area: { // Limite la zone de détection si besoin
+            area: {
                 top: "10%",
                 right: "10%",
                 left: "10%",
                 bottom: "10%"
             },
-            singleChannel: false // couleur
+            singleChannel: false
         },
         locator: {
             patchSize: "medium",
@@ -435,7 +450,7 @@ document.getElementById('btnScan').addEventListener('click', () => {
         decoder: {
             readers: ["code_128_reader"]
         },
-        locate: true, // Permet à Quagga d'améliorer la détection en scannant mieux
+        locate: true,
     }, function (err) {
         if (err) {
             notif.error("Erreur lors de l'init Quagga :", err);
@@ -447,18 +462,15 @@ document.getElementById('btnScan').addEventListener('click', () => {
         console.log("Scanner démarré !");
     });
 
-    // Dès qu’un code est trouvé
     Quagga.onDetected(result => {
         const code = result.codeResult.code;
-
         serialNumberContainer.value = code;
-
-        // STOP proprement après détection
         Quagga.stop();
         scannerActive = false;
         scannerContainer.innerHTML = '';
     });
 });
+
 
 endScan.addEventListener('click', () => {
     Quagga.stop();
