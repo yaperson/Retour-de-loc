@@ -1,3 +1,31 @@
+function showUpdateNotification() {
+    const banner = document.createElement('div');
+    banner.style.position = 'fixed';
+    banner.style.bottom = '0';
+    banner.style.left = '0';
+    banner.style.right = '0';
+    banner.style.background = '#333';
+    banner.style.color = 'white';
+    banner.style.padding = '1rem';
+    banner.style.display = 'flex';
+    banner.style.justifyContent = 'space-between';
+    banner.style.alignItems = 'center';
+    banner.style.zIndex = '9999';
+    banner.innerHTML = `
+        <span>🔄 Nouvelle version disponible</span>
+        <button style="padding:0.5rem 1rem; background:#00c853; color:white; border:none; border-radius:4px; cursor:pointer;">
+            Mettre à jour
+        </button>
+    `;
+
+    banner.querySelector('button').addEventListener('click', () => {
+        window.location.reload(); // Recharge l'app avec la nouvelle version
+    });
+
+    document.body.appendChild(banner);
+}
+
+
 // Questions générales oui/non
 const questionsOuiNon = [
     "Le produit est-il en bon état et est-il complet (produit et accessoires) ?",

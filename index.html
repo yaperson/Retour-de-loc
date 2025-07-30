@@ -10,12 +10,28 @@
     <title>Contrôle Matériel Médical</title>
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').then(function (reg) {
-                console.log('Service Worker enregistré', reg);
-            }).catch(function (err) {
-                console.error('Erreur SW:', err);
+            navigator.serviceWorker.register('sw.js').then(registration => {
+                console.log('Service Worker enregistré', registration);
+
+                // 🔄 Surveille les mises à jour
+                registration.addEventListener('updatefound', () => {
+                    const newWorker = registration.installing;
+                    if (!newWorker) return;
+
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed') {
+                            if (navigator.serviceWorker.controller) {
+                                // ✅ Nouvelle version prête
+                                showUpdateNotification();
+                            }
+                        }
+                    });
+                });
+            }).catch(err => {
+                console.error('Erreur lors de l’enregistrement du Service Worker :', err);
             });
         }
+
     </script>
 </head>
 
@@ -23,7 +39,7 @@
 
     <h1>Contrôle Matériel Médical</h1>
 
-    
+
     <button id="btnScan">📷 Scanner code-barres</button>
     <button id="endScan" title="Arreter le scan">✖️</button>
     <div id="scanner"></div>
