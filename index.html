@@ -32,13 +32,39 @@
             });
         }
 
+        function showUpdateNotification() {
+            const banner = document.createElement('div');
+            banner.style.position = 'fixed';
+            banner.style.bottom = '0';
+            banner.style.left = '0';
+            banner.style.right = '0';
+            banner.style.background = '#333';
+            banner.style.color = 'white';
+            banner.style.padding = '1rem';
+            banner.style.display = 'flex';
+            banner.style.justifyContent = 'space-between';
+            banner.style.alignItems = 'center';
+            banner.style.zIndex = '9999';
+            banner.innerHTML = `
+                <span>🔄 Nouvelle version disponible</span>
+                <button style="padding:0.5rem 1rem; background:#00c853; color:white; border:none; border-radius:4px; cursor:pointer;">
+                    Mettre à jour
+                </button>
+            `;
+
+            banner.querySelector('button').addEventListener('click', () => {
+                window.location.reload(); // Recharge l'app avec la nouvelle version
+            });
+
+            document.body.appendChild(banner);
+        }
+
     </script>
 </head>
 
 <body>
 
     <h1>Contrôle Matériel Médical</h1>
-
 
     <button id="btnScan">📷 Scanner code-barres</button>
     <button id="endScan" title="Arreter le scan">✖️</button>
@@ -84,14 +110,14 @@
             <div style="text-align:center; margin-top:1.5rem;">
                 <button id="btnModalPrint">🖨️ Imprimer</button>
                 <button id="btnModalDownload">⬇️ Télécharger</button>
-                <!-- <button id="btnModalMail">📧 Envoyer par mail</button> -->
+                <button id="btnModalMail">📧 Envoyer par mail</button>
                 <button id="btnModalShare">📤 Partager</button>
             </div>
         </div>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
 </body>
 
 </html>

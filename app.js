@@ -1,30 +1,4 @@
-function showUpdateNotification() {
-    const banner = document.createElement('div');
-    banner.style.position = 'fixed';
-    banner.style.bottom = '0';
-    banner.style.left = '0';
-    banner.style.right = '0';
-    banner.style.background = '#333';
-    banner.style.color = 'white';
-    banner.style.padding = '1rem';
-    banner.style.display = 'flex';
-    banner.style.justifyContent = 'space-between';
-    banner.style.alignItems = 'center';
-    banner.style.zIndex = '9999';
-    banner.innerHTML = `
-        <span>🔄 Nouvelle version disponible</span>
-        <button style="padding:0.5rem 1rem; background:#00c853; color:white; border:none; border-radius:4px; cursor:pointer;">
-            Mettre à jour
-        </button>
-    `;
-
-    banner.querySelector('button').addEventListener('click', () => {
-        window.location.reload(); // Recharge l'app avec la nouvelle version
-    });
-
-    document.body.appendChild(banner);
-}
-
+import notif from './assets/script/notif.js';
 
 // Questions générales oui/non
 const questionsOuiNon = [
@@ -360,6 +334,38 @@ btnModalDownload.addEventListener('click', async () => {
     }
 });
 
+btnModalMail.addEventListener('click', async () => {
+    try {
+        btnModalMail.disabled = true;
+        const canvas = await html2canvas(modalContent, { scale: 2, useCORS: true });
+
+        // Convertir en blob (fichier binaire)
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+
+        const formData = new FormData();
+        formData.append('file', blob, `rapport-${Date.now()}.png`);
+        formData.append('subject', `Rapport ${serialNumberContainer.value}-${date.slice(0,10)}`);
+        formData.append('text', 'Rapport en pièce jointe');
+        formData.append('to', 'contact@hopicile.fr');
+
+        const res = await fetch('http://localhost:3000/send-report', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await res.json();
+        if (result.success) {
+            notif.success("Rapport envoyé par mail !");
+            btnModalMail.disabled = false;
+        } else {
+            notif.error("Échec de l'envoi : " + result.error);
+        }
+    } catch (err) {
+        console.error("Erreur lors de l’envoi : ", err);
+        notif.error("Erreur lors de l’envoi : " + err.message);
+    }
+});
+
 btnModalShare.addEventListener('click', async () => {
     try {
         const canvas = await html2canvas(modalContent, { scale: 2, useCORS: true });
@@ -381,7 +387,7 @@ btnModalShare.addEventListener('click', async () => {
             URL.revokeObjectURL(link.href);
         }
     } catch (err) {
-        alert("Erreur lors du partage : " + err.message);
+        notif.error("Erreur lors du partage : " + err.message);
     }
 });
 
@@ -432,7 +438,7 @@ document.getElementById('btnScan').addEventListener('click', () => {
         locate: true, // Permet à Quagga d'améliorer la détection en scannant mieux
     }, function (err) {
         if (err) {
-            console.error("Erreur lors de l'init Quagga :", err);
+            notif.error("Erreur lors de l'init Quagga :", err);
             return;
         }
 
@@ -444,9 +450,6 @@ document.getElementById('btnScan').addEventListener('click', () => {
     // Dès qu’un code est trouvé
     Quagga.onDetected(result => {
         const code = result.codeResult.code;
-
-        console.log(result)
-        console.log("Code barre : " + code)
 
         serialNumberContainer.value = code;
 
