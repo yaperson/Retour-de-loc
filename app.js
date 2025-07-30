@@ -60,6 +60,8 @@ const photoEnsembleInput = document.getElementById('photoEnsemble');
 const photoEtiquetteInput = document.getElementById('photoEtiquette');
 const previewEnsemble = document.getElementById('previewEnsemble');
 const previewEtiquette = document.getElementById('previewEtiquette');
+let serialNumberContainer = document.getElementById("serial_number");
+let date = new Date().toLocaleString('fr-FR');
 
 let answers = {}; // stocke réponses des questions
 let etatAnswers = {}; // stocke réponses état éléments
@@ -74,6 +76,10 @@ function createYesNoButtons(questionId, container) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.textContent = text;
+        
+        if (text === "Oui") btn.classList = "validate" 
+        else btn.classList = "error"
+        
         btn.addEventListener('click', () => {
             answers[questionId] = text;
             // décocher les autres
@@ -95,6 +101,11 @@ function createEtatButtons(elementId, container) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.textContent = text;
+
+        if (text === 'Bon (RAS)') btn.classList = "validate" 
+        else if (text === 'Moyen (Entretien)') btn.classList = "warning"
+        else btn.classList = "error"
+
         btn.addEventListener('click', () => {
             etatAnswers[elementId] = text;
             Array.from(btnsDiv.children).forEach(b => b.classList.remove('selected'));
@@ -209,6 +220,8 @@ const btnModalPrint = document.getElementById('btnModalPrint');
 const btnModalDownload = document.getElementById('btnModalDownload');
 const btnModalShare = document.getElementById('btnModalShare');
 const btnModalMail = document.getElementById('btnModalMail');
+const endScan = document.getElementById('endScan');
+const scannerContainer = document.getElementById('scanner');
 
 // Génère le résumé HTML
 function generateSummaryHTML() {
@@ -217,7 +230,7 @@ function generateSummaryHTML() {
     const dateStr = dt.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' });
 
     let html = `
-        <h1>Rapport de contrôle - ${type}</h1>
+        <h1>Rapport de contrôle - ${type} [${serialNumberContainer.value}]</h1>
         <p>Date: ${dateStr}</p>
         <h2>Analyse de risque</h2>
         <hr />
@@ -311,18 +324,19 @@ btnModalDownload.addEventListener('click', async () => {
         // Créer un lien de téléchargement
         const a = document.createElement('a');
         a.href = imageData;
-        a.download = 'rapport_controle.png';
+        a.download = `${serialNumberContainer.value}-${date.slice(0,10)}.png`;
         a.click();
 
     } catch (e) {
         alert("Erreur lors du téléchargement de l’image : " + (e.message || e));
     }
 });
+
 btnModalShare.addEventListener('click', async () => {
     try {
         const canvas = await html2canvas(modalContent, { scale: 2, useCORS: true });
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-        const file = new File([blob], 'rapport.png', { type: 'image/png' });
+        const file = new File([blob], `${serialNumberContainer.value}-${date.slice(0,10)}.png`, { type: 'image/png' });
 
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
@@ -334,7 +348,7 @@ btnModalShare.addEventListener('click', async () => {
             // Fallback : téléchargement
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = 'rapport.png';
+            link.download = `${serialNumberContainer.value}-${date.slice(0,10)}.png`;
             link.click();
             URL.revokeObjectURL(link.href);
         }
@@ -349,3 +363,74 @@ window.addEventListener('click', (e) => {
         modal.style.display = 'none';
     }
 });
+
+
+// Quagga - Lecture Code Bar
+let scannerActive = false;
+
+document.getElementById('btnScan').addEventListener('click', () => {
+    scannerContainer.innerHTML = ''; // Nettoie avant tout
+
+    if (scannerActive) {
+        Quagga.stop();
+        scannerActive = false;
+        return;
+    }
+
+    Quagga.init({
+        inputStream: {
+            type: "LiveStream",
+            target: scannerContainer,
+            constraints: {
+                facingMode: "environment",
+                width: { min: 640 },
+                height: { min: 480 }
+            },
+            area: { // Limite la zone de détection si besoin
+                top: "10%",
+                right: "10%",
+                left: "10%",
+                bottom: "10%"
+            },
+            singleChannel: false // couleur
+        },
+        locator: {
+            patchSize: "medium",
+            halfSample: true
+        },
+        decoder: {
+            readers: ["code_128_reader"]
+        },
+        locate: true, // Permet à Quagga d'améliorer la détection en scannant mieux
+    }, function (err) {
+        if (err) {
+            console.error("Erreur lors de l'init Quagga :", err);
+            return;
+        }
+
+        Quagga.start();
+        scannerActive = true;
+        console.log("Scanner démarré !");
+    });
+
+    // Dès qu’un code est trouvé
+    Quagga.onDetected(result => {
+        const code = result.codeResult.code;
+
+        console.log(result)
+        console.log("Code barre : " + code)
+
+        serialNumberContainer.value = code;
+
+        // STOP proprement après détection
+        Quagga.stop();
+        scannerActive = false;
+        scannerContainer.innerHTML = '';
+    });
+});
+
+endScan.addEventListener('click', () => {
+    Quagga.stop();
+    scannerActive = false;
+    scannerContainer.innerHTML = '';
+})

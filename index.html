@@ -23,6 +23,14 @@
 
     <h1>Contrôle Matériel Médical</h1>
 
+    
+    <button id="btnScan">📷 Scanner code-barres</button>
+    <button id="endScan" title="Arreter le scan">✖️</button>
+    <div id="scanner"></div>
+
+    <label for="serial_number">Numéro de série</label>
+    <input type="text" id="serial_number">
+
     <label for="typeMateriel">Choisir le type de matériel :</label>
     <select id="typeMateriel" required>
         <option value="">-- Sélectionner --</option>
@@ -66,6 +74,7 @@
         </div>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
     <script src="app.js"></script>
 </body>
 

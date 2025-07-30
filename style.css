@@ -33,10 +33,22 @@ select {
     cursor: pointer;
 }
 
-.buttons-choices button.selected {
+.buttons-choices button.validate.selected {
     background-color: #4caf50;
     color: white;
     border-color: #4caf50;
+}
+
+.buttons-choices button.warning.selected {
+    background-color: #ec9128;
+    color: white;
+    border-color: #ec9128;
+}
+
+.buttons-choices button.error.selected {
+    background-color: #da4a4a;
+    color: white;
+    border-color: #da4a4a;
 }
 
 input[type="file"] {
@@ -148,4 +160,13 @@ img.preview {
     font-weight: bold;
     margin-top: 1rem;
     display: block;
+}
+
+
+#scanner {
+    z-index: 1;
+}
+
+#scanner canvas {
+    image-rendering: pixelated;
 }
