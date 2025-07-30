@@ -78,10 +78,10 @@ function createYesNoButtons(questionId, container) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.textContent = text;
-        
-        if (text === "Oui") btn.classList = "validate" 
+
+        if (text === "Oui") btn.classList = "validate"
         else btn.classList = "error"
-        
+
         btn.addEventListener('click', () => {
             answers[questionId] = text;
             // décocher les autres
@@ -104,7 +104,7 @@ function createEtatButtons(elementId, container) {
         btn.type = 'button';
         btn.textContent = text;
 
-        if (text === 'Bon (RAS)') btn.classList = "validate" 
+        if (text === 'Bon (RAS)') btn.classList = "validate"
         else if (text === 'Moyen (Entretien)') btn.classList = "warning"
         else btn.classList = "error"
 
@@ -326,7 +326,7 @@ btnModalDownload.addEventListener('click', async () => {
         // Créer un lien de téléchargement
         const a = document.createElement('a');
         a.href = imageData;
-        a.download = `${serialNumberContainer.value}-${date.slice(0,10)}.png`;
+        a.download = `${serialNumberContainer.value}-${date.slice(0, 10)}.png`;
         a.click();
 
     } catch (e) {
@@ -344,7 +344,7 @@ btnModalMail.addEventListener('click', async () => {
 
         const formData = new FormData();
         formData.append('file', blob, `rapport-${Date.now()}.png`);
-        formData.append('subject', `Rapport ${serialNumberContainer.value}-${date.slice(0,10)}`);
+        formData.append('subject', `Rapport ${serialNumberContainer.value}-${date.slice(0, 10)}`);
         formData.append('text', 'Rapport en pièce jointe');
         formData.append('to', 'contact@hopicile.fr');
 
@@ -370,7 +370,7 @@ btnModalShare.addEventListener('click', async () => {
     try {
         const canvas = await html2canvas(modalContent, { scale: 2, useCORS: true });
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-        const file = new File([blob], `${serialNumberContainer.value}-${date.slice(0,10)}.png`, { type: 'image/png' });
+        const file = new File([blob], `${serialNumberContainer.value}-${date.slice(0, 10)}.png`, { type: 'image/png' });
 
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
@@ -382,7 +382,7 @@ btnModalShare.addEventListener('click', async () => {
             // Fallback : téléchargement
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = `${serialNumberContainer.value}-${date.slice(0,10)}.png`;
+            link.download = `${serialNumberContainer.value}-${date.slice(0, 10)}.png`;
             link.click();
             URL.revokeObjectURL(link.href);
         }
@@ -398,73 +398,54 @@ window.addEventListener('click', (e) => {
     }
 });
 
-async function getPreferredBackCamera() {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const videoDevices = devices.filter(d => d.kind === 'videoinput');
-
-    // Filtrer les caméras arrière
-    const backCameras = videoDevices.filter(d => d.label.toLowerCase().includes('back'));
-
-    // Prioriser les caméras arrière sans mention "wide" ou "ultra"
-    const preferred = backCameras.find(d => !d.label.toLowerCase().includes('wide')) || backCameras[0];
-
-    return preferred?.deviceId;
-}
-
-// Quagga - Lecture Code Bar
+// Quagga - Lecture Code Barre
 let scannerActive = false;
 
-document.getElementById('btnScan').addEventListener('click', async () => {
-    scannerContainer.innerHTML = '';
+document.getElementById('btnScan').addEventListener('click', () => {
+    const scannerContainer = document.getElementById('scanner');
+    const serialNumberContainer = document.getElementById('serialNumberContainer');
+
+    if (!savedDeviceId) {
+        alert("Aucune caméra sélectionnée. Ouvre les paramètres pour en choisir une.");
+        return;
+    }
 
     if (scannerActive) {
         Quagga.stop();
         scannerActive = false;
+        scannerContainer.innerHTML = '';
         return;
     }
-
-    const deviceId = await getPreferredBackCamera();
 
     Quagga.init({
         inputStream: {
             type: "LiveStream",
             target: scannerContainer,
             constraints: {
-                deviceId: deviceId ? { exact: deviceId } : undefined,
+                deviceId: { exact: savedDeviceId },
                 width: { min: 640 },
-                height: { min: 480 },
-                facingMode: "environment"
-            },
-            area: {
-                top: "10%",
-                right: "10%",
-                left: "10%",
-                bottom: "10%"
-            },
-            singleChannel: false
-        },
-        locator: {
-            patchSize: "medium",
-            halfSample: true
+                height: { min: 480 }
+            }
         },
         decoder: {
             readers: ["code_128_reader"]
         },
-        locate: true,
+        locate: true
     }, function (err) {
         if (err) {
-            notif.error("Erreur lors de l'init Quagga :", err);
+            console.error("Erreur Quagga:", err);
+            alert("Erreur initialisation scanner : " + err.message);
             return;
         }
 
         Quagga.start();
         scannerActive = true;
-        console.log("Scanner démarré !");
     });
 
     Quagga.onDetected(result => {
         const code = result.codeResult.code;
         serialNumberContainer.value = code;
+
         Quagga.stop();
         scannerActive = false;
         scannerContainer.innerHTML = '';
@@ -477,3 +458,47 @@ endScan.addEventListener('click', () => {
     scannerActive = false;
     scannerContainer.innerHTML = '';
 })
+
+
+const cameraSelect = document.getElementById('cameraSelect');
+const btnSettings = document.getElementById('btnSettings');
+const settingsModal = document.getElementById('settingsModal');
+const saveSettings = document.getElementById('saveSettings');
+const closeSettingsModal = document.getElementById('closeSettingsModal');
+
+let savedDeviceId = localStorage.getItem('preferredCamera');
+
+// Ouvre la modale
+btnSettings.addEventListener('click', async () => {
+    await populateCameraSelect();
+    if (savedDeviceId) {
+        cameraSelect.value = savedDeviceId;
+    }
+    settingsModal.style.display = 'block';
+});
+
+// Ferme la modale
+closeSettingsModal.addEventListener('click', () => {
+    settingsModal.style.display = 'none';
+});
+
+// Enregistre la sélection
+saveSettings.addEventListener('click', () => {
+    savedDeviceId = cameraSelect.value;
+    localStorage.setItem('preferredCamera', savedDeviceId);
+    settingsModal.style.display = 'none';
+});
+
+// Remplir la liste des caméras
+async function populateCameraSelect() {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+
+    cameraSelect.innerHTML = '';
+    videoDevices.forEach(device => {
+        const option = document.createElement('option');
+        option.value = device.deviceId;
+        option.text = device.label || `Caméra ${cameraSelect.length + 1}`;
+        cameraSelect.appendChild(option);
+    });
+}

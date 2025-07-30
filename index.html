@@ -64,10 +64,27 @@
 
 <body>
 
+    <header>
+        <!-- Bouton pour ouvrir la modale -->
+        <button id="btnSettings">Paramètres</button>
+
+        <!-- Modale -->
+        <div id="settingsModal" style="display: none;">
+            <h3>Paramètres</h3>
+            <label for="cameraSelect">Choisir une caméra :</label>
+            <select id="cameraSelect"></select>
+            <br><br>
+            <button id="saveSettings">Enregistrer</button>
+            <button id="closeSettingsModal">Fermer</button>
+        </div>
+
+    </header>
+
     <h1>Contrôle Matériel Médical</h1>
 
     <button id="btnScan">📷 Scanner code-barres</button>
     <button id="endScan" title="Arreter le scan">✖️</button>
+
     <div id="scanner"></div>
 
     <label for="serial_number">Numéro de série</label>
