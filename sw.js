@@ -1,5 +1,5 @@
 // ⚙️ Incrémente la version à chaque mise à jour
-const CACHE_NAME = 'controle-app-v3.2-debug';
+const CACHE_NAME = 'controle-app-v3.2.1';
 
 const FILES_TO_CACHE = [
   '/',
