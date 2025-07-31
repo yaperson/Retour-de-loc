@@ -494,11 +494,19 @@ async function populateCameraSelect() {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const videoDevices = devices.filter(d => d.kind === 'videoinput');
 
+    console.log(devices);
+    console.log(videoDevices);
+
     cameraSelect.innerHTML = '';
-    videoDevices.forEach(device => {
-        const option = document.createElement('option');
-        option.value = device.deviceId;
-        option.text = device.label || `Caméra ${cameraSelect.length + 1}`;
-        cameraSelect.appendChild(option);
-    });
+
+    if(videoDevices.length > 1) {
+        videoDevices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `Caméra ${cameraSelect.length + 1}`;
+                cameraSelect.appendChild(option);
+        });
+    } else {
+        localStorage.setItem('preferredCamera', videoDevices[0]);
+    }
 }
