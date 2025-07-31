@@ -405,11 +405,6 @@
         const scannerContainer = document.getElementById('scanner');
         const serialNumberContainer = document.getElementById('serialNumberContainer');
 
-        if (!savedDeviceId) {
-            alert("Aucune caméra sélectionnée. Ouvre les paramètres pour en choisir une.");
-            return;
-        }
-
         if (scannerActive) {
             Quagga.stop();
             scannerActive = false;
