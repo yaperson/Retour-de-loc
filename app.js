@@ -417,7 +417,7 @@
                 type: "LiveStream",
                 target: scannerContainer,
                 constraints: {
-                    facingMode: { exact: "environment" },
+                    facingMode: { ideal: "environment" },
                     width: { min: 640 },
                     height: { min: 480 }
                 }
@@ -436,27 +436,37 @@
 Quagga.start();
 scannerActive = true;
 
-// 📷 Appliquer zoom si possible
 setTimeout(() => {
     const video = scannerContainer.querySelector('video');
     if (!video || !video.srcObject) return;
 
     const track = video.srcObject.getVideoTracks()[0];
-    const capabilities = track.getCapabilities();
 
-    if (capabilities.zoom) {
-        const desiredZoom = Math.min(2, capabilities.zoom.max); // x2 ou max dispo
-        track.applyConstraints({
-            advanced: [{ zoom: desiredZoom }]
-        }).then(() => {
-            console.log(`Zoom appliqué : x${desiredZoom}`);
-        }).catch(err => {
-            console.warn("Zoom non appliqué :", err);
-        });
-    } else {
-        console.log("Zoom non supporté.");
+    try {
+        const capabilities = track.getCapabilities();
+        const settings = track.getSettings();
+
+        console.log("🎥 Capabilities:", capabilities);
+        console.log("🎥 Current settings:", settings);
+
+        if (capabilities.zoom && typeof capabilities.zoom.max === "number") {
+            const safeZoom = Math.min(1.5, capabilities.zoom.max); // On reste prudent
+            console.log(`🔍 Applying zoom: ${safeZoom}`);
+
+            track.applyConstraints({
+                advanced: [{ zoom: safeZoom }]
+            }).then(() => {
+                console.log(`✅ Zoom appliqué: x${safeZoom}`);
+            }).catch(err => {
+                console.warn("⚠️ Zoom non appliqué:", err);
+            });
+        } else {
+            console.log("🚫 Zoom non supporté par cette caméra.");
+        }
+    } catch (err) {
+        console.warn("Erreur lors de l'application du zoom:", err);
     }
-}, 500); // ⏱ petit délai pour s’assurer que la vidéo est attachée
+}, 800); // délai un peu plus long pour laisser le flux démarrer
 
         });
 
