@@ -418,8 +418,8 @@ document.getElementById('btnScan').addEventListener('click', () => {
             target: document.getElementById("scanner"),
             constraints: {
                 facingMode: { ideal: "environment" }, // ou "user" pour caméra frontale
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
+                width: { ideal: 720 },
+                height: { ideal: 564 }
             }
         },
         decoder: {
@@ -432,37 +432,18 @@ document.getElementById('btnScan').addEventListener('click', () => {
             return;
         }
         Quagga.start();
-
-        // ➕ Zoom après démarrage
-        setTimeout(() => {
-            const track = Quagga.CameraAccess.getActiveTrack();
-            const caps = track.getCapabilities?.();
-
-            if (caps?.zoom) {
-                const safeZoom = Math.min(2.0, caps.zoom.max);
-                track.applyConstraints({
-                    advanced: [{ zoom: safeZoom }]
-                }).then(() => {
-                    console.log("Zoom appliqué:", safeZoom);
-                }).catch(err => {
-                    console.warn("Zoom échoué:", err);
-                });
-            }
-        }, 1000);
     });
-
+    
 });
-
 Quagga.onDetected(result => {
     const code = result.codeResult.code;
     serialNumberContainer.value = code;
-
+    
     Quagga.stop();
     scannerActive = false;
     scannerContainer.innerHTML = '';
 });
-
-
+    
 endScan.addEventListener('click', () => {
     Quagga.stop();
     scannerActive = false;
