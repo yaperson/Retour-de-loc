@@ -348,7 +348,7 @@ btnModalMail.addEventListener('click', async () => {
         formData.append('text', 'Rapport en pièce jointe');
         formData.append('to', 'contact@hopicile.fr');
 
-        const res = await fetch('http://localhost:3000/send-report', {
+        const res = await fetch('https://hopicile.r32-dev.fr/hopicile-tech/send-report', {
             method: 'POST',
             body: formData
         });
