@@ -170,3 +170,35 @@ img.preview {
 #scanner canvas {
     image-rendering: pixelated;
 }
+
+button.selected {
+    background-color: #007bff;
+}
+
+.home_maintenance_mode__container {
+    margin: 1em 0;
+    padding: 1em 0;
+    border-bottom: solid 1px grey;
+} 
+
+#clientAddressSuggestions {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #ccc;
+    max-height: 200px;
+    overflow-y: auto;
+    position: absolute;
+    background: white;
+    width: 100%;
+    z-index: 9999;
+}
+
+#clientAddressSuggestions li {
+    padding: 0.5rem;
+    cursor: pointer;
+}
+
+#clientAddressSuggestions li:hover {
+    background-color: #f0f0f0;
+}

@@ -65,6 +65,28 @@
 <body>
     <h1>Contrôle Matériel Médical</h1>
 
+    <div class="maintenance_mode">
+        <p>Mode de maintenance : </p>
+        <button id="maintenance_mode_standard" class="selected">Standard</button>
+        <button id="maintenance_mode_home">Domicile</button>
+    </div>
+
+    <!-- <div class="standard_maintenance_mode">
+        
+    </div> -->
+
+    <div class="home_maintenance_mode home_maintenance_mode__container">
+        <label for="clientName">Nom du patient</label>
+        <input type="text" name="" id="clientName">
+
+        <label for="clientAddress">Adresse</label>
+        <input type="text" id="clientAddress">
+        <ul id="clientAddressSuggestions" class="suggestions"></ul>
+
+        <label for="latestPositioningAcquisition">Date d'aquisition matelas ou coussin</label>
+        <input type="month" min="2012-01" id="latestPositioningAcquisition">
+    </div>
+
     <button id="btnScan">📷 Scanner code-barres</button>
     <button id="endScan" title="Arreter le scan">✖️</button>
 
@@ -99,6 +121,13 @@
         <input type="file" accept="image/*" capture="environment" id="photoEtiquette" />
         <img id="previewEtiquette" class="preview" alt="Aperçu photo étiquette" />
     </div>
+
+    <div class="home_maintenance_mode">
+        <h3>Signature du patient</h3>
+        <canvas id="signatureCanvas" width="300" height="150" style="border:1px solid #ccc; border-radius:5px;"></canvas>
+        <button id="clearSignature">Effacer la signature</button>
+    </div>
+
 
     <button id="btnSummary" disabled>Voir résumé & Partager</button>
 

@@ -1,4 +1,6 @@
 import notif from './assets/script/notif.js';
+import canvas from './assets/script/canvas.js';
+import autocompletion from './assets/script/address-autocomplete.js';
 
 // Questions générales oui/non
 const questionsOuiNon = [
@@ -52,6 +54,46 @@ const etatElements = {
     ]
 };
 
+const homeMaintenanceMode = document.getElementsByClassName('home_maintenance_mode');
+const maintenanceModeStandard = document.getElementById('maintenance_mode_standard');
+const maintenanceModeHome = document.getElementById('maintenance_mode_home');
+const signatureCanvas = document.getElementById('signatureCanvas');
+
+// Init du mode standard au demarage
+window.addEventListener('DOMContentLoaded', () => {
+    // Masque les éléments "domicile" au chargement
+    for (const element of homeMaintenanceMode) {
+        element.style.display = 'none';
+    }
+
+    maintenanceModeStandard.classList.add('selected');
+    maintenanceModeHome.classList.remove('selected');
+});
+
+maintenanceModeStandard.addEventListener('click', () => {
+    signatureCanvas.parentElement.style.display = 'none';
+    
+    maintenanceModeHome.classList.remove('selected');
+    maintenanceModeStandard.classList.add('selected');
+
+    for (let element of homeMaintenanceMode) {
+        element.style.display = 'none'
+    }
+})
+
+maintenanceModeHome.addEventListener('click', () => {
+    signatureCanvas.parentElement.style.display = 'block';
+
+    maintenanceModeHome.classList.add('selected')
+    maintenanceModeStandard.classList.remove('selected')
+
+    for (let element of homeMaintenanceMode) {
+        element.style.display = 'block'
+    }
+
+    autocompletion();
+})
+
 const typeSelect = document.getElementById('typeMateriel');
 const questionsContainer = document.getElementById('questionsContainer');
 const btnSummary = document.getElementById('btnSummary');
@@ -62,8 +104,13 @@ const photoEnsembleInput = document.getElementById('photoEnsemble');
 const photoEtiquetteInput = document.getElementById('photoEtiquette');
 const previewEnsemble = document.getElementById('previewEnsemble');
 const previewEtiquette = document.getElementById('previewEtiquette');
+const clientName = document.getElementById('clientName');
+const clientAddress = document.getElementById('clientAddress');
+const latestPositioningAcquisition = document.getElementById('latestPositioningAcquisition'); 
 let serialNumberContainer = document.getElementById("serial_number");
 let date = new Date().toLocaleString('fr-FR');
+let signatureData = null;
+
 
 let answers = {}; // stocke réponses des questions
 let etatAnswers = {}; // stocke réponses état éléments
@@ -162,6 +209,8 @@ typeSelect.addEventListener('change', () => {
 
     notesContainer.style.display = 'block';
     photosContainer.style.display = 'block';
+
+    canvas();
 });
 
 // Preview photos
@@ -231,14 +280,18 @@ function generateSummaryHTML() {
     const dt = new Date();
     const dateStr = dt.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' });
 
+    const [year, month] = latestPositioningAcquisition.value.split('-');
+
     let html = `
             <h1>Rapport de contrôle - ${type} [${serialNumberContainer.value}]</h1>
-            <p>Date: ${dateStr}</p>
-            <h2>Analyse de risque</h2>
-            <hr />
-            <h2>Questions générales</h2>
-        `;
-
+            <p>Date: ${dateStr}</p>`;
+    if (maintenanceModeHome.classList.contains('selected')) {
+        html += `<hr /><h2>Informations client</h2><p><b>${clientName.value}</b> - ${clientAddress.value}</p>`;
+        html += `<h3>Date d'achat du matelas ou coussin si fauteuil roulant</h3><p>${month}-${year}</p>`;
+    }
+    
+    html += `<hr /><h2>Questions générales</h2>`
+    
     questionsOuiNon.forEach((q, i) => {
         const qid = `q${i}`;
         const rep = answers[qid] || "Non répondu";
@@ -269,11 +322,23 @@ function generateSummaryHTML() {
         html += `<p><strong>Photo de l'étiquette :</strong> Non fournie</p>`;
     }
 
+    if (maintenanceModeHome.classList.contains('selected')) {
+        html += `<hr /><h2>Signature du client</h2>`;
+        
+        if ( signatureData) {
+            html += `<p><img src="${signatureData}" alt="Signature du client" style="max-width:300px; border:1px solid #ccc; border-radius:4px;" /></p>`;
+        } else {
+            html += `<p>Aucune signature fournie.</p>`;
+        }
+    }
+
     return html;
 }
 
 // Ouvre la modale avec le résumé
 btnSummary.addEventListener('click', () => {
+    signatureData = signatureCanvas.toDataURL(); // Image base64
+
     const html = generateSummaryHTML();
     modalContent.innerHTML = html;
     modal.style.display = 'block';
@@ -348,7 +413,7 @@ btnModalMail.addEventListener('click', async () => {
         formData.append('text', 'Rapport en pièce jointe');
         formData.append('to', 'contact@hopicile.fr');
 
-        const res = await fetch('https://hopicile.r32-dev.fr/hopicile-tech/send-report', {
+        const res = await fetch('http://localhost:3000/send-report', {
             method: 'POST',
             body: formData
         });
@@ -423,7 +488,8 @@ document.getElementById('btnScan').addEventListener('click', () => {
             }
         },
         decoder: {
-            readers: ["code_128_reader"]
+            readers: ["code_93_reader"]
+            // readers: ["code_128_reader"]
         },
         locate: true
     }, function (err) {
@@ -449,3 +515,4 @@ endScan.addEventListener('click', () => {
     scannerActive = false;
     scannerContainer.innerHTML = '';
 })
+
