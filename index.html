@@ -63,18 +63,21 @@
 </head>
 
 <body>
-    <h1>Contrôle Matériel Médical</h1>
-
-    <div class="maintenance_mode">
+    <header>
+        <h1>Contrôle Matériel Médical</h1>
+        
         <p>Mode de maintenance : </p>
-        <button id="maintenance_mode_standard" class="selected">Standard</button>
-        <button id="maintenance_mode_home">Domicile</button>
-    </div>
+        <div class="maintenance_mode">
+            <button id="maintenance_mode_standard" class="selected">Standard</button>
+            <button id="maintenance_mode_home">Domicile</button>
+        </div>
+    </header>
 
     <!-- <div class="standard_maintenance_mode">
         
     </div> -->
 
+    <main>
     <div class="home_maintenance_mode home_maintenance_mode__container">
         <label for="clientName">Nom du patient</label>
         <input type="text" name="" id="clientName">
@@ -86,6 +89,7 @@
         <label for="latestPositioningAcquisition">Date d'aquisition matelas ou coussin</label>
         <input type="month" min="2012-01" id="latestPositioningAcquisition">
     </div>
+    <div class="container">
 
     <button id="btnScan">📷 Scanner code-barres</button>
     <button id="endScan" title="Arreter le scan">✖️</button>
@@ -102,6 +106,7 @@
         <option value="fauteuil_manuel">Fauteuil roulant manuel</option>
         <option value="fauteuil_electrique">Fauteuil roulant électrique</option>
         <option value="leve_personne">Lève-personne / verticalisateur</option>
+        <option value="pompe_nutrition">Pompe de nutrition</option>
         <option value="autre">Autre</option>
     </select>
 
@@ -127,9 +132,12 @@
         <canvas id="signatureCanvas" width="300" height="150" style="border:1px solid #ccc; border-radius:5px;"></canvas>
         <button id="clearSignature">Effacer la signature</button>
     </div>
+    </div>
 
 
     <button id="btnSummary" disabled>Voir résumé & Partager</button>
+
+</main>
 
     <!-- Modale résumé -->
     <div id="modal">

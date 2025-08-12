@@ -22,7 +22,7 @@ const etatElements = {
         "Potence",
         "Tête et pied de lit",
         "Châssis",
-        "Moteur"
+        "Moteur et câblage"
     ],
     fauteuil_manuel: [
         "Roues",
@@ -40,14 +40,22 @@ const etatElements = {
         "Toiles (assise et dossier)",
         "Châssis",
         "Batterie",
-        "Moteur"
+        "Moteur et câblage"
     ],
     leve_personne: [
         "Structure",
         "Sangles",
-        "Moteur",
+        "Moteur et câblage",
         "Commande",
         "Roues"
+    ],
+    pompe_nutrition: [
+        "Boitier",
+        "Porte",
+        "support",
+        "Alimentation",
+        "Rotor",
+        "Segments"
     ],
     autre: [
         "État général des éléments"
@@ -413,7 +421,7 @@ btnModalMail.addEventListener('click', async () => {
         formData.append('text', 'Rapport en pièce jointe');
         formData.append('to', 'contact@hopicile.fr');
 
-        const res = await fetch('https://hopicile.r32-dev.fr/hopicile-tech/send-report', {
+        const res = await fetch('http://localhost:3000/send-report', {
             method: 'POST',
             body: formData
         });
@@ -493,7 +501,6 @@ document.getElementById('btnScan').addEventListener('click', () => {
         locate: true
     }, function (err) {
         if (err) {
-            console.error("Erreur Quagga:", err);
             return;
         }
         Quagga.start();
@@ -516,5 +523,4 @@ endScan.addEventListener('click', () => {
     scannerActive = false;
     scannerContainer.innerHTML = '';
 })
-
 

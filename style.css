@@ -171,6 +171,16 @@ img.preview {
     image-rendering: pixelated;
 }
 
+.maintenance_mode button {
+    margin: 2rem;
+    padding: 0.8rem;
+    background-color: slategray;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
 button.selected {
     background-color: #007bff;
 }
@@ -190,7 +200,6 @@ button.selected {
     overflow-y: auto;
     position: absolute;
     background: white;
-    width: 100%;
     z-index: 9999;
 }
 
