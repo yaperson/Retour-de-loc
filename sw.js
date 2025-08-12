@@ -1,5 +1,5 @@
 // ⚙️ Incrémente la version à chaque mise à jour
-const CACHE_NAME = 'controle-app-v3.2.5';
+const CACHE_NAME = 'controle-app-v4.0.0';
 
 const FILES_TO_CACHE = [
   '/',
@@ -10,6 +10,8 @@ const FILES_TO_CACHE = [
   '/assets/icons/192.png',
   '/assets/icons/512.png',
   '/assets/script/notif.js',
+  '/assets/script/canvas.js',
+  '/assets/script/address-autocomplete.js',
   'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js'
 ];
