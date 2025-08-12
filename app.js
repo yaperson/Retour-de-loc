@@ -488,7 +488,7 @@ document.getElementById('btnScan').addEventListener('click', () => {
             }
         },
         decoder: {
-            readers: ["code_93_reader", "code_128_reader"]
+            readers: ["code_39_reader", "code_93_reader"]
         },
         locate: true
     }, function (err) {
@@ -503,6 +503,8 @@ document.getElementById('btnScan').addEventListener('click', () => {
 Quagga.onDetected(result => {
     const code = result.codeResult.code;
     serialNumberContainer.value = code;
+
+    console.log(result)
     
     Quagga.stop();
     scannerActive = false;

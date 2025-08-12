@@ -202,3 +202,7 @@ button.selected {
 #clientAddressSuggestions li:hover {
     background-color: #f0f0f0;
 }
+
+#signatureCanvas {
+    touch-action: none; /* important pour empêcher le scroll lors du dessin */
+}

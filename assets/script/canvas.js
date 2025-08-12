@@ -24,6 +24,22 @@ export default () => {
         drawing = false;
     });
 
+    canvas.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        isDrawing = true;
+        const { x, y } = getXY(e);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+    });
+    canvas.addEventListener("touchmove", (e) => {
+        e.preventDefault();
+        if (!isDrawing) return;
+        const { x, y } = getXY(e);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+    });
+    canvas.addEventListener("touchend", () => isDrawing = false);
+
     document.getElementById('clearSignature').addEventListener('click', () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
     });
