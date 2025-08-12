@@ -488,8 +488,7 @@ document.getElementById('btnScan').addEventListener('click', () => {
             }
         },
         decoder: {
-            readers: ["code_93_reader"]
-            // readers: ["code_128_reader"]
+            readers: ["code_93_reader", "code_128_reader"]
         },
         locate: true
     }, function (err) {
