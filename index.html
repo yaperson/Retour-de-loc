@@ -70,6 +70,7 @@
         <div class="maintenance_mode">
             <button id="maintenance_mode_standard" class="selected">Standard</button>
             <button id="maintenance_mode_home">Domicile</button>
+            <button id="maintenance_mode_sav">SAV</button>
         </div>
     </header>
 
@@ -89,8 +90,13 @@
         <label for="latestPositioningAcquisition">Date d'aquisition matelas ou coussin</label>
         <input type="month" min="2012-01" id="latestPositioningAcquisition">
     </div>
-    <div class="container">
 
+    <div class="sav_maintenance_mode sav_maintenance_mode__container">
+        <label for="clientNameSav">Nom de l'usager</label>
+        <input type="text" name="" id="clientNameSav">
+    </div>
+
+    <div class="container">
     <button id="btnScan">📷 Scanner code-barres</button>
     <button id="endScan" title="Arreter le scan">✖️</button>
 
@@ -125,6 +131,13 @@
         <label>Photo de l'étiquette (n° de série) :</label>
         <input type="file" accept="image/*" capture="environment" id="photoEtiquette" />
         <img id="previewEtiquette" class="preview" alt="Aperçu photo étiquette" />
+    </div>
+
+
+    <div class="sav_maintenance_mode">
+        <label>Photo details :</label>
+        <input type="file" accept="image/*" capture="environment" id="photoDetails" />
+        <img id="previewDetails" class="preview" alt="Aperçu photo étiquette" />
     </div>
 
     <div class="home_maintenance_mode">

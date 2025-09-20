@@ -4,15 +4,14 @@ import autocompletion from './assets/script/address-autocomplete.js';
 
 // Questions générales oui/non
 const questionsOuiNon = [
-    "Le produit est-il en bon état et est-il complet (produit et accessoires) ?",
+    "Le produit est-il complet (produit et accessoires) ?",
     "Le produit présente-t-il des détériorations ou des faiblesses de n'importe quel type ?",
-    "Le produit fonctionne-t-il correctement sous charge nominale ?",
-    "Le produit est-il complètement fonctionnel conformément au manuel d'utilisation ?",
-    "Tous les défauts trouvés ont-ils été éliminés et tous les composants défectueux ont-ils été remplacés ?",
+    "Le produit est-il complètement fonctionnel conformément au manuel d'utilisation (y compris sous charge nominale) ?",
     "Tous les boulons/vis sont-ils fixés correctement et le produit est-il monté correctement ?",
     "Le produit est-il techniquement et fonctionnellement sûr ?",
+    "L'autocollant d'identification est-il facilement lisible et est-il fermement apposé sur le produit ?",
     "Le produit a-t-il été nettoyé et désinfecté ?",
-    "L'autocollant d'identification est-il facilement lisible et est-il fermement apposé sur le produit ?"
+    "Tous les défauts trouvés ont-ils été éliminés et tous les composants défectueux ont-ils été remplacés ?",
 ];
 
 // Questions état du produit par type matériel (exemple lit, fauteuil manuel)
@@ -63,8 +62,10 @@ const etatElements = {
 };
 
 const homeMaintenanceMode = document.getElementsByClassName('home_maintenance_mode');
+const savMaintenanceMode = document.getElementsByClassName('sav_maintenance_mode');
 const maintenanceModeStandard = document.getElementById('maintenance_mode_standard');
 const maintenanceModeHome = document.getElementById('maintenance_mode_home');
+const maintenanceModeSAV = document.getElementById('maintenance_mode_sav');
 const signatureCanvas = document.getElementById('signatureCanvas');
 
 // Init du mode standard au demarage
@@ -72,10 +73,13 @@ window.addEventListener('DOMContentLoaded', () => {
     // Masque les éléments "domicile" au chargement
     for (const element of homeMaintenanceMode) {
         element.style.display = 'none';
+    } for (let element of savMaintenanceMode) {
+        element.style.display = 'none'
     }
 
-    maintenanceModeStandard.classList.add('selected');
     maintenanceModeHome.classList.remove('selected');
+    maintenanceModeStandard.classList.add('selected');
+    // maintenanceModeSAV.classList.remove('selected');
 });
 
 maintenanceModeStandard.addEventListener('click', () => {
@@ -83,8 +87,12 @@ maintenanceModeStandard.addEventListener('click', () => {
     
     maintenanceModeHome.classList.remove('selected');
     maintenanceModeStandard.classList.add('selected');
+    maintenanceModeSAV.classList.remove('selected');
 
     for (let element of homeMaintenanceMode) {
+        element.style.display = 'none'
+    }
+    for (let element of savMaintenanceMode) {
         element.style.display = 'none'
     }
 })
@@ -94,13 +102,34 @@ maintenanceModeHome.addEventListener('click', () => {
 
     maintenanceModeHome.classList.add('selected')
     maintenanceModeStandard.classList.remove('selected')
+    maintenanceModeSAV.classList.remove('selected');
 
     for (let element of homeMaintenanceMode) {
+        element.style.display = 'block'
+    }
+    for (let element of savMaintenanceMode) {
+        element.style.display = 'none'
+    }
+    autocompletion();
+})
+
+maintenanceModeSAV.addEventListener('click', () => {
+    signatureCanvas.parentElement.style.display = 'block';
+
+    maintenanceModeHome.classList.remove('selected')
+    maintenanceModeStandard.classList.remove('selected')
+    maintenanceModeSAV.classList.add('selected');
+
+    for (let element of homeMaintenanceMode) {
+        element.style.display = 'none'
+    }
+    for (let element of savMaintenanceMode) {
         element.style.display = 'block'
     }
 
     autocompletion();
 })
+
 
 const typeSelect = document.getElementById('typeMateriel');
 const questionsContainer = document.getElementById('questionsContainer');
@@ -110,9 +139,12 @@ const notes = document.getElementById('notes');
 const photosContainer = document.getElementById('photosContainer');
 const photoEnsembleInput = document.getElementById('photoEnsemble');
 const photoEtiquetteInput = document.getElementById('photoEtiquette');
+const photoDetailsInput = document.getElementById('photoDetails');
 const previewEnsemble = document.getElementById('previewEnsemble');
 const previewEtiquette = document.getElementById('previewEtiquette');
+const previewDetails = document.getElementById('previewDetails');
 const clientName = document.getElementById('clientName');
+const clientNameSav = document.getElementById('clientNameSav');
 const clientAddress = document.getElementById('clientAddress');
 const latestPositioningAcquisition = document.getElementById('latestPositioningAcquisition'); 
 let serialNumberContainer = document.getElementById("serial_number");
@@ -122,7 +154,7 @@ let signatureData = null;
 
 let answers = {}; // stocke réponses des questions
 let etatAnswers = {}; // stocke réponses état éléments
-let photosData = { ensemble: null, etiquette: null };
+let photosData = { ensemble: null, etiquette: null, details: null };
 
 // Crée les boutons oui/non
 function createYesNoButtons(questionId, container) {
@@ -256,6 +288,23 @@ photoEtiquetteInput.addEventListener('change', e => {
     }
 });
 
+photoDetailsInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => {
+            previewDetails.src = reader.result;
+            photosData.details = reader.result;
+            checkAllAnswered();
+        };
+        reader.readAsDataURL(file);
+    } else {
+        previewDetails.src = '';
+        photosData.details = null;
+        checkAllAnswered();
+    }
+});
+
 // Vérifie que toutes les questions ont une réponse + photos sélectionnées
 function checkAllAnswered() {
     // Tous les oui/non doivent avoir une réponse
@@ -297,6 +346,10 @@ function generateSummaryHTML() {
         html += `<hr /><h2>Informations client</h2><p><b>${clientName.value}</b> - ${clientAddress.value}</p>`;
         html += `<h3>Date d'achat du matelas ou coussin si fauteuil roulant</h3><p>${month}-${year}</p>`;
     }
+
+    if (maintenanceModeSAV.classList.contains('selected')) {
+        html += `<hr /><h2>Usager : ${clientNameSav.value}</h2>`;
+    }
     
     html += `<hr /><h2>Questions générales</h2>`
     
@@ -328,6 +381,14 @@ function generateSummaryHTML() {
         html += `<p><strong>Photo de l'étiquette :</strong><br><img src="${photosData.etiquette}" alt="Photo de l'étiquette" /></p>`;
     } else {
         html += `<p><strong>Photo de l'étiquette :</strong> Non fournie</p>`;
+    }
+
+    if (maintenanceModeSAV.classList.contains('selected')) {
+        if (photosData.etiquette) {
+            html += `<p><strong>Photo complémentaire :</strong><br><img src="${photosData.details}" alt="Photo complémentaire" /></p>`;
+        } else {
+            html += `<p><strong>Photo de l'étiquette :</strong> Non fournie</p>`;
+        }
     }
 
     if (maintenanceModeHome.classList.contains('selected')) {
@@ -363,18 +424,38 @@ closeModal.addEventListener('click', () => {
 // Imprimer le contenu de la modale
 btnModalPrint.addEventListener('click', () => {
     const html = modalContent.dataset.html || '';
-    const printWindow = window.open('', '', 'width=800,height=600');
-    printWindow.document.write(`
-                    <html><head><title>Impression Rapport</title><meta charset="UTF-8" />
-                    <style>body{font-family:Arial,sans-serif; max-width:600px; margin:auto; padding:1rem;}
-                    img{max-width:50vw; margin-top:0.5rem; border:1px solid #ccc; border-radius:5px;}
-                    h1,h2{text-align:center;}</style>
-                    </head><body>${html}
-                `);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
+
+    if (isMobile()) {
+        // Stocker le contenu dans sessionStorage
+        sessionStorage.setItem('printContent', html);
+        // Rediriger vers la page /print
+        window.location.href = '/print.html';
+    } else {
+        const printWindow = window.open('', '', 'width=800,height=600');
+        printWindow.document.write(`
+                        <html><head><title>Impression Rapport</title><meta charset="UTF-8" />
+                        <style>body{font-family:Arial,sans-serif; max-width:600px; margin:auto; padding:1rem;}
+                        img{max-width:50vw; margin-top:0.5rem; border:1px solid #ccc; border-radius:5px;}
+                        h1,h2{text-align:center;}</style>
+                        </head><body>${html}
+                    `);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.onload = () => {
+            const images = [...printWindow.document.images];
+            Promise.all(images.map(img =>
+                img.complete ? Promise.resolve() :
+                new Promise(res => {
+                    img.onload = img.onerror = res;
+                })
+            )).then(() => {
+                printWindow.print();
+                printWindow.close();
+            });
+        };
+    }
+    // printWindow.print();
+    // printWindow.close();    
 });
 
 btnModalDownload.addEventListener('click', async () => {
@@ -421,7 +502,7 @@ btnModalMail.addEventListener('click', async () => {
         formData.append('text', 'Rapport en pièce jointe');
         formData.append('to', 'contact@hopicile.fr');
 
-        const res = await fetch('https://hopicile.r32-dev.fr/hopicile-tech/send-report', {
+        const res = await fetch('http://localhost:3000/send-report', {
             method: 'POST',
             body: formData
         });
@@ -524,4 +605,6 @@ endScan.addEventListener('click', () => {
     scannerContainer.innerHTML = '';
 })
 
-
+function isMobile() {
+    return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}   
