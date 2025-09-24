@@ -13,6 +13,14 @@ const questionsOuiNon = [
     "Le produit a-t-il été nettoyé et désinfecté ?",
     "Tous les défauts trouvés ont-ils été éliminés et tous les composants défectueux ont-ils été remplacés ?",
 ];
+// Questions générales oui/non SAV
+const questionsOuiNonSAV = [
+    "Le produit est-il complet (produit et accessoires) ?",
+    "Le produit présente-t-il des détériorations ou des faiblesses de n'importe quel type ?",
+    "Le produit est-il complètement fonctionnel conformément au manuel d'utilisation (y compris sous charge nominale) ?",
+    "Tous les boulons/vis sont-ils fixés correctement et le produit est-il monté correctement ?",
+    "Le produit est-il techniquement et fonctionnellement sûr ?",
+];
 
 // Questions état du produit par type matériel (exemple lit, fauteuil manuel)
 const etatElements = {
@@ -84,7 +92,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 maintenanceModeStandard.addEventListener('click', () => {
     signatureCanvas.parentElement.style.display = 'none';
-    
+
     maintenanceModeHome.classList.remove('selected');
     maintenanceModeStandard.classList.add('selected');
     maintenanceModeSAV.classList.remove('selected');
@@ -133,6 +141,7 @@ maintenanceModeSAV.addEventListener('click', () => {
 
 const typeSelect = document.getElementById('typeMateriel');
 const questionsContainer = document.getElementById('questionsContainer');
+const questionsSAVContainer = document.getElementById('questionsSAVContainer');
 const btnSummary = document.getElementById('btnSummary');
 const notesContainer = document.getElementById('notes_container');
 const notes = document.getElementById('notes');
@@ -146,18 +155,19 @@ const previewDetails = document.getElementById('previewDetails');
 const clientName = document.getElementById('clientName');
 const clientNameSav = document.getElementById('clientNameSav');
 const clientAddress = document.getElementById('clientAddress');
-const latestPositioningAcquisition = document.getElementById('latestPositioningAcquisition'); 
+const latestPositioningAcquisition = document.getElementById('latestPositioningAcquisition');
 let serialNumberContainer = document.getElementById("serial_number");
 let date = new Date().toLocaleString('fr-FR');
 let signatureData = null;
 
 
 let answers = {}; // stocke réponses des questions
+let savAnswers = {};
 let etatAnswers = {}; // stocke réponses état éléments
 let photosData = { ensemble: null, etiquette: null, details: null };
 
 // Crée les boutons oui/non
-function createYesNoButtons(questionId, container) {
+function createYesNoButtons(questionId, container, isSavQuestions) {
     const btnsDiv = document.createElement('div');
     btnsDiv.className = 'buttons-choices';
 
@@ -169,13 +179,23 @@ function createYesNoButtons(questionId, container) {
         if (text === "Oui") btn.classList = "validate"
         else btn.classList = "error"
 
-        btn.addEventListener('click', () => {
-            answers[questionId] = text;
-            // décocher les autres
-            Array.from(btnsDiv.children).forEach(b => b.classList.remove('selected'));
-            btn.classList.add('selected');
-            checkAllAnswered();
-        });
+        if (isSavQuestions) {
+            btn.addEventListener('click', () => {
+                savAnswers[questionId] = text;
+                // décocher les autres
+                Array.from(btnsDiv.children).forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                checkAllAnswered(isSavQuestions);
+            });
+        } else {   
+            btn.addEventListener('click', () => {
+                answers[questionId] = text;
+                // décocher les autres
+                Array.from(btnsDiv.children).forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                checkAllAnswered();
+            });
+        }
         btnsDiv.appendChild(btn);
     });
     container.appendChild(btnsDiv);
@@ -209,9 +229,11 @@ function createEtatButtons(elementId, container) {
 // Affiche les questions + état en fonction du matériel
 typeSelect.addEventListener('change', () => {
     answers = {};
+    savAnswers = {};
     etatAnswers = {};
     btnSummary.disabled = true;
     questionsContainer.innerHTML = '';
+    questionsSAVContainer.innerHTML = '';
     notesContainer.style.display = 'none';
     photosContainer.style.display = 'none';
     previewEnsemble.src = '';
@@ -221,30 +243,72 @@ typeSelect.addEventListener('change', () => {
     const type = typeSelect.value;
     if (!type) return;
 
-    // Questions oui/non
-    questionsOuiNon.forEach((q, i) => {
-        const qid = `q${i}`;
-        const div = document.createElement('div');
-        div.className = 'question';
-        const p = document.createElement('p');
-        p.textContent = q;
-        div.appendChild(p);
-        createYesNoButtons(qid, div);
-        questionsContainer.appendChild(div);
-    });
+    // SAV Mode
+    if (savMaintenanceMode) {
+        let isSavQuestions = true
 
-    // Questions état
-    if (etatElements[type]) {
-        etatElements[type].forEach((element, i) => {
-            const eid = `etat${i}`;
+        questionsOuiNonSAV.forEach((q, i) => {
+            const qid = `q${i}`;
             const div = document.createElement('div');
             div.className = 'question';
             const p = document.createElement('p');
-            p.textContent = element;
+            p.textContent = q;
             div.appendChild(p);
-            createEtatButtons(eid, div);
+            createYesNoButtons(qid, div, isSavQuestions);
+            questionsSAVContainer.appendChild(div);
+        });
+
+        // Questions état
+        if (etatElements[type]) {
+            etatElements[type].forEach((element, i) => {
+                const eid = `etat${i}`;
+                const div = document.createElement('div');
+                div.className = 'question';
+                const p = document.createElement('p');
+                p.textContent = element;
+                div.appendChild(p);
+                createEtatButtons(eid, div);
+                questionsContainer.appendChild(div);
+            });
+        }
+
+        // Questions oui/non
+        questionsOuiNon.forEach((q, i) => {
+            const qid = `q${i}`;
+            const div = document.createElement('div');
+            div.className = 'question';
+            const p = document.createElement('p');
+            p.textContent = q;
+            div.appendChild(p);
+            createYesNoButtons(qid, div);
             questionsContainer.appendChild(div);
         });
+    } else {
+        // Questions oui/non
+        questionsOuiNon.forEach((q, i) => {
+            const qid = `q${i}`;
+            const div = document.createElement('div');
+            div.className = 'question';
+            const p = document.createElement('p');
+            p.textContent = q;
+            div.appendChild(p);
+            createYesNoButtons(qid, div);
+            questionsContainer.appendChild(div);
+        });
+
+        // Questions état
+        if (etatElements[type]) {
+            etatElements[type].forEach((element, i) => {
+                const eid = `etat${i}`;
+                const div = document.createElement('div');
+                div.className = 'question';
+                const p = document.createElement('p');
+                p.textContent = element;
+                div.appendChild(p);
+                createEtatButtons(eid, div);
+                questionsContainer.appendChild(div);
+            });
+        }
     }
 
     notesContainer.style.display = 'block';
@@ -306,9 +370,11 @@ photoDetailsInput.addEventListener('change', e => {
 });
 
 // Vérifie que toutes les questions ont une réponse + photos sélectionnées
-function checkAllAnswered() {
+function checkAllAnswered(isSavQuestions) {
     // Tous les oui/non doivent avoir une réponse
     const qOk = questionsOuiNon.length === Object.keys(answers).length;
+    const savQOk = null;
+    if (isSavQuestions) savQOk = questionsOuiNon.length === Object.keys(savAnswers).length;
 
     // Tous les états doivent avoir une réponse
     const type = typeSelect.value;
@@ -349,60 +415,182 @@ function generateSummaryHTML() {
 
     if (maintenanceModeSAV.classList.contains('selected')) {
         html += `<hr /><h2>Usager : ${clientNameSav.value}</h2>`;
-    }
-    
-    html += `<hr /><h2>Questions générales</h2>`
-    
-    questionsOuiNon.forEach((q, i) => {
-        const qid = `q${i}`;
-        const rep = answers[qid] || "Non répondu";
-        html += `<div class="question-summary"><strong>${q}</strong><br>Réponse : ${rep}</div>`;
-    });
 
-    html += `<hr /><h2>État des éléments</h2>`;
-    const typeKey = typeSelect.value;
-    if (etatElements[typeKey]) {
-        etatElements[typeKey].forEach((el, i) => {
-            const eid = `etat${i}`;
-            const rep = etatAnswers[eid] || "Non renseigné";
-            html += `<div class="question-summary"><strong>${el}</strong><br>État : ${rep}</div>`;
+
+        html += `<hr /><h2>Questions générales à la réception du produit</h2>`
+
+        questionsOuiNonSAV.forEach((q, i) => {
+            const qid = `q${i}`;
+            const rep = savAnswers[qid] || "Non répondu";
+            html += `<div class="question-summary"><strong>${q}</strong><br>Réponse : ${rep}</div>`;
         });
-    }
+        html += `<h3>État des éléments</h3>`;
+        const typeKey = typeSelect.value;
+        if (etatElements[typeKey]) {
+            etatElements[typeKey].forEach((el, i) => {
+                const eid = `etat${i}`;
+                const rep = etatAnswers[eid] || "Non renseigné";
+                html += `<div class="question-summary"><strong>${el}</strong><br>État : ${rep}</div>`;
+            });
+        }
 
-    html += `<hr /><h2>Notes</h2><p>${notes.value.trim() ? notes.value.trim().replace(/\n/g, "<br>") : "Aucune note"}</p>`;
+        html += `<hr /><h2>Questions générales post entretien</h2>`
 
-    html += `<hr /><h2>Photos</h2>`;
-    if (photosData.ensemble) {
-        html += `<p><strong>Photo de l'ensemble :</strong><br><img src="${photosData.ensemble}" alt="Photo de l'ensemble" /></p>`;
-    } else {
-        html += `<p><strong>Photo de l'ensemble :</strong> Non fournie</p>`;
-    }
-    if (photosData.etiquette) {
-        html += `<p><strong>Photo de l'étiquette :</strong><br><img src="${photosData.etiquette}" alt="Photo de l'étiquette" /></p>`;
-    } else {
-        html += `<p><strong>Photo de l'étiquette :</strong> Non fournie</p>`;
-    }
+        questionsOuiNon.forEach((q, i) => {
+            const qid = `q${i}`;
+            const rep = answers[qid] || "Non répondu";
+            html += `<div class="question-summary"><strong>${q}</strong><br>Réponse : ${rep}</div>`;
+        });
 
-    if (maintenanceModeSAV.classList.contains('selected')) {
+        html += `<hr /><h2>Notes</h2><p>${notes.value.trim() ? notes.value.trim().replace(/\n/g, "<br>") : "Aucune note"}</p>`;
+
+        html += `<hr /><h2>Photos</h2>`;
+        if (photosData.ensemble) {
+            html += `<p><strong>Photo de l'ensemble :</strong><br><img src="${photosData.ensemble}" alt="Photo de l'ensemble" /></p>`;
+        } else {
+            html += `<p><strong>Photo de l'ensemble :</strong> Non fournie</p>`;
+        }
         if (photosData.etiquette) {
-            html += `<p><strong>Photo complémentaire :</strong><br><img src="${photosData.details}" alt="Photo complémentaire" /></p>`;
+            html += `<p><strong>Photo de l'étiquette :</strong><br><img src="${photosData.etiquette}" alt="Photo de l'étiquette" /></p>`;
         } else {
             html += `<p><strong>Photo de l'étiquette :</strong> Non fournie</p>`;
         }
-    }
 
-    if (maintenanceModeHome.classList.contains('selected')) {
-        html += `<hr /><h2>Signature du client</h2>`;
-        
-        if ( signatureData) {
-            html += `<p><img src="${signatureData}" alt="Signature du client" style="max-width:300px; border:1px solid #ccc; border-radius:4px;" /></p>`;
-        } else {
-            html += `<p>Aucune signature fournie.</p>`;
+        if (maintenanceModeSAV.classList.contains('selected')) {
+            if (photosData.etiquette) {
+                html += `<p><strong>Photo complémentaire :</strong><br><img src="${photosData.details}" alt="Photo complémentaire" /></p>`;
+            } else {
+                html += `<p><strong>Photo de l'étiquette :</strong> Non fournie</p>`;
+            }
         }
-    }
 
-    return html;
+        return html;
+    }
+    else {
+        html += `<hr /><h2>Questions générales</h2>`
+
+        questionsOuiNon.forEach((q, i) => {
+            const qid = `q${i}`;
+            const rep = answers[qid] || "Non répondu";
+            html += `<div class="question-summary"><strong>${q}</strong><br>Réponse : ${rep}</div>`;
+        });
+
+        html += `<hr /><h2>État des éléments</h2>`;
+        const typeKey = typeSelect.value;
+        if (etatElements[typeKey]) {
+            etatElements[typeKey].forEach((el, i) => {
+                const eid = `etat${i}`;
+                const rep = etatAnswers[eid] || "Non renseigné";
+                html += `<div class="question-summary"><strong>${el}</strong><br>État : ${rep}</div>`;
+            });
+        }
+
+        html += `<hr /><h2>Notes</h2><p>${notes.value.trim() ? notes.value.trim().replace(/\n/g, "<br>") : "Aucune note"}</p>`;
+
+        html += `<hr /><h2>Photos</h2>`;
+        if (photosData.ensemble) {
+            html += `<p><strong>Photo de l'ensemble :</strong><br><img src="${photosData.ensemble}" alt="Photo de l'ensemble" /></p>`;
+        } else {
+            html += `<p><strong>Photo de l'ensemble :</strong> Non fournie</p>`;
+        }
+        if (photosData.etiquette) {
+            html += `<p><strong>Photo de l'étiquette :</strong><br><img src="${photosData.etiquette}" alt="Photo de l'étiquette" /></p>`;
+        } else {
+            html += `<p><strong>Photo de l'étiquette :</strong> Non fournie</p>`;
+        }
+
+        if (maintenanceModeSAV.classList.contains('selected')) {
+            if (photosData.etiquette) {
+                html += `<p><strong>Photo complémentaire :</strong><br><img src="${photosData.details}" alt="Photo complémentaire" /></p>`;
+            } else {
+                html += `<p><strong>Photo de l'étiquette :</strong> Non fournie</p>`;
+            }
+        }
+
+        if (maintenanceModeHome.classList.contains('selected')) {
+            html += `<hr /><h2>Signature du client</h2>`;
+
+            if (signatureData) {
+                html += `<p><img src="${signatureData}" alt="Signature du client" style="max-width:300px; border:1px solid #ccc; border-radius:4px;" /></p>`;
+            } else {
+                html += `<p>Aucune signature fournie.</p>`;
+            }
+        }
+
+        return html;
+    }
 }
+// function generateSummaryHTML() {
+//     const type = typeSelect.options[typeSelect.selectedIndex].text;
+//     const dt = new Date();
+//     const dateStr = dt.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' });
+
+//     const [year, month] = latestPositioningAcquisition.value.split('-');
+
+//     let html = `
+//             <h1>Rapport de contrôle - ${type} [${serialNumberContainer.value}]</h1>
+//             <p>Date: ${dateStr}</p>`;
+//     if (maintenanceModeHome.classList.contains('selected')) {
+//         html += `<hr /><h2>Informations client</h2><p><b>${clientName.value}</b> - ${clientAddress.value}</p>`;
+//         html += `<h3>Date d'achat du matelas ou coussin si fauteuil roulant</h3><p>${month}-${year}</p>`;
+//     }
+
+//     if (maintenanceModeSAV.classList.contains('selected')) {
+//         html += `<hr /><h2>Usager : ${clientNameSav.value}</h2>`;
+//     }
+
+//     html += `<hr /><h2>Questions générales</h2>`
+
+//     questionsOuiNon.forEach((q, i) => {
+//         const qid = `q${i}`;
+//         const rep = answers[qid] || "Non répondu";
+//         html += `<div class="question-summary"><strong>${q}</strong><br>Réponse : ${rep}</div>`;
+//     });
+
+//     html += `<hr /><h2>État des éléments</h2>`;
+//     const typeKey = typeSelect.value;
+//     if (etatElements[typeKey]) {
+//         etatElements[typeKey].forEach((el, i) => {
+//             const eid = `etat${i}`;
+//             const rep = etatAnswers[eid] || "Non renseigné";
+//             html += `<div class="question-summary"><strong>${el}</strong><br>État : ${rep}</div>`;
+//         });
+//     }
+
+//     html += `<hr /><h2>Notes</h2><p>${notes.value.trim() ? notes.value.trim().replace(/\n/g, "<br>") : "Aucune note"}</p>`;
+
+//     html += `<hr /><h2>Photos</h2>`;
+//     if (photosData.ensemble) {
+//         html += `<p><strong>Photo de l'ensemble :</strong><br><img src="${photosData.ensemble}" alt="Photo de l'ensemble" /></p>`;
+//     } else {
+//         html += `<p><strong>Photo de l'ensemble :</strong> Non fournie</p>`;
+//     }
+//     if (photosData.etiquette) {
+//         html += `<p><strong>Photo de l'étiquette :</strong><br><img src="${photosData.etiquette}" alt="Photo de l'étiquette" /></p>`;
+//     } else {
+//         html += `<p><strong>Photo de l'étiquette :</strong> Non fournie</p>`;
+//     }
+
+//     if (maintenanceModeSAV.classList.contains('selected')) {
+//         if (photosData.etiquette) {
+//             html += `<p><strong>Photo complémentaire :</strong><br><img src="${photosData.details}" alt="Photo complémentaire" /></p>`;
+//         } else {
+//             html += `<p><strong>Photo de l'étiquette :</strong> Non fournie</p>`;
+//         }
+//     }
+
+//     if (maintenanceModeHome.classList.contains('selected')) {
+//         html += `<hr /><h2>Signature du client</h2>`;
+
+//         if ( signatureData) {
+//             html += `<p><img src="${signatureData}" alt="Signature du client" style="max-width:300px; border:1px solid #ccc; border-radius:4px;" /></p>`;
+//         } else {
+//             html += `<p>Aucune signature fournie.</p>`;
+//         }
+//     }
+
+//     return html;
+// }
 
 // Ouvre la modale avec le résumé
 btnSummary.addEventListener('click', () => {
@@ -445,9 +633,9 @@ btnModalPrint.addEventListener('click', () => {
             const images = [...printWindow.document.images];
             Promise.all(images.map(img =>
                 img.complete ? Promise.resolve() :
-                new Promise(res => {
-                    img.onload = img.onerror = res;
-                })
+                    new Promise(res => {
+                        img.onload = img.onerror = res;
+                    })
             )).then(() => {
                 printWindow.print();
                 printWindow.close();
@@ -586,19 +774,19 @@ document.getElementById('btnScan').addEventListener('click', () => {
         }
         Quagga.start();
     });
-    
+
 });
 Quagga.onDetected(result => {
     const code = result.codeResult.code;
     serialNumberContainer.value = code;
 
     console.log(result)
-    
+
     Quagga.stop();
     scannerActive = false;
     scannerContainer.innerHTML = '';
 });
-    
+
 endScan.addEventListener('click', () => {
     Quagga.stop();
     scannerActive = false;

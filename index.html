@@ -116,6 +116,14 @@
         <option value="autre">Autre</option>
     </select>
 
+    <div class="sav_maintenance_mode">
+        <div id="questionsSAVContainer" class="questions"></div>
+        
+        <label>Photo details :</label>
+        <input type="file" accept="image/*" capture="environment" id="photoDetails" />
+        <img id="previewDetails" class="preview" alt="Aperçu photo details" />
+    </div>
+
     <div id="questionsContainer" class="questions"></div>
 
     <div class="notes_container" id="notes_container">
@@ -131,13 +139,6 @@
         <label>Photo de l'étiquette (n° de série) :</label>
         <input type="file" accept="image/*" capture="environment" id="photoEtiquette" />
         <img id="previewEtiquette" class="preview" alt="Aperçu photo étiquette" />
-    </div>
-
-
-    <div class="sav_maintenance_mode">
-        <label>Photo details :</label>
-        <input type="file" accept="image/*" capture="environment" id="photoDetails" />
-        <img id="previewDetails" class="preview" alt="Aperçu photo étiquette" />
     </div>
 
     <div class="home_maintenance_mode">
