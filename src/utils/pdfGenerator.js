@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf'
-import 'jspdf-autotable'
+import autoTable from 'jspdf-autotable'
 
 export const generatePDF = async (store, mode, sendToBackend = false) => {
   // Initialisation du PDF A4
@@ -44,7 +44,7 @@ export const generatePDF = async (store, mode, sendToBackend = false) => {
   // 1. SAV Questions
   if (mode === 'sav' && Object.keys(store.savAnswers).length > 0) {
     const tableData = Object.entries(store.savAnswers).map(([k, v]) => [`Question ${parseInt(k)+1}`, v])
-    doc.autoTable({
+    autoTable(doc, {
       startY: yPos,
       head: [['Question à la réception', 'Réponse']],
       body: tableData,
@@ -63,7 +63,7 @@ export const generatePDF = async (store, mode, sendToBackend = false) => {
       // Une amélioration serait de stocker le texte complet de l'élément dans le store.
       return [`Élément ${parseInt(k)+1}`, v]
     })
-    doc.autoTable({
+    autoTable(doc, {
       startY: yPos,
       head: [['État des éléments', 'Statut']],
       body: tableData,
@@ -77,7 +77,7 @@ export const generatePDF = async (store, mode, sendToBackend = false) => {
   // 3. General Questions
   if (Object.keys(store.generalAnswers).length > 0) {
     const tableData = Object.entries(store.generalAnswers).map(([k, v]) => [`Question ${parseInt(k)+1}`, v])
-    doc.autoTable({
+    autoTable(doc, {
       startY: yPos,
       head: [['Contrôle Général', 'Réponse']],
       body: tableData,
