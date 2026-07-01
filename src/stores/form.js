@@ -1,20 +1,50 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import localforage from 'localforage'
 
 export const useFormStore = defineStore('form', () => {
   const currentDraftId = ref(Date.now().toString()) // Identifiant unique pour le brouillon en cours
   const draftsList = ref([]) // Liste des brouillons enregistrés
 
+  // Questions statiques utilisées à la fois dans le formulaire et dans l'export PDF
+  const generalQuestions = [
+    "Le produit est-il complet (produit et accessoires) ?",
+    "Le produit présente-t-il des détériorations ou des faiblesses de n'importe quel type ?",
+    "Le produit est-il complètement fonctionnel conformément au manuel d'utilisation (y compris sous charge nominale) ?",
+    "Tous les boulons/vis sont-ils fixés correctement et le produit est-il monté correctement ?",
+    "Le produit est-il techniquement et fonctionnellement sûr ?",
+    "L'autocollant d'identification est-il facilement lisible et est-il fermement apposé sur le produit ?",
+    "Le produit a-t-il été nettoyé et désinfecté ?",
+    "Tous les défauts trouvés ont-ils été éliminés et tous les composants défectueux ont-ils été remplacés ?",
+  ]
+
+  const savQuestions = [
+    "Le produit est-il complet (produit et accessoires) ?",
+    "Le produit présente-t-il des détériorations ou des faiblesses de n'importe quel type ?",
+    "Le produit est-il complètement fonctionnel conformément au manuel d'utilisation (y compris sous charge nominale) ?",
+    "Tous les boulons/vis sont-ils fixés correctement et le produit est-il monté correctement ?",
+    "Le produit est-il techniquement et fonctionnellement sûr ?",
+  ]
+
+  const etatElements = {
+    lit: ["Barrières", "Potence", "Tête et pied de lit", "Châssis", "Moteur et câblage"],
+    fauteuil_manuel: ["Roues", "Accoudoirs", "Freins", "Repose-pieds", "Toiles (assise et dossier)", "Châssis"],
+    fauteuil_electrique: ["Roues", "Accoudoirs", "Freins", "Repose-pieds", "Toiles (assise et dossier)", "Châssis", "Batterie", "Moteur et câblage"],
+    leve_personne: ["Structure", "Sangles", "Moteur et câblage", "Commande", "Roues"],
+    pompe_nutrition: ["Boitier", "Porte", "support", "Alimentation", "Rotor", "Segments"],
+    autre: ["État général des éléments"]
+  }
+
+  // Produit
+  const serialNumber = ref('')
+  const typeMateriel = ref('')
+  const currentEtatElements = computed(() => etatElements[typeMateriel.value] || [])
+
   // Informations Client
   const clientName = ref('')
   const clientAddress = ref('')
   const clientNameSav = ref('')
   const latestPositioningAcquisition = ref('')
-
-  // Produit
-  const serialNumber = ref('')
-  const typeMateriel = ref('')
   const signatureData = ref(null)
   
   // Photos
@@ -167,6 +197,7 @@ export const useFormStore = defineStore('form', () => {
     serialNumber, typeMateriel, signatureData,
     photoEnsemble, photoEtiquette, photoDetails,
     generalAnswers, savAnswers, etatAnswers, notes,
+    generalQuestions, savQuestions, etatElements, currentEtatElements,
     fetchDraftsList, saveCurrentDraft, loadDraft, deleteDraft, startNewDraft
   }
 })

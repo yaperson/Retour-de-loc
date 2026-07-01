@@ -43,7 +43,11 @@ export const generatePDF = async (store, mode, sendToBackend = false) => {
   // Tableaux dynamiques
   // 1. SAV Questions
   if (mode === 'sav' && Object.keys(store.savAnswers).length > 0) {
-    const tableData = Object.entries(store.savAnswers).map(([k, v]) => [`Question ${parseInt(k)+1}`, v])
+    const tableData = Object.entries(store.savAnswers).map(([k, v]) => {
+      const index = parseInt(k, 10)
+      const questionText = store.savQuestions?.[index] || `Question ${index + 1}`
+      return [questionText, v]
+    })
     autoTable(doc, {
       startY: yPos,
       head: [['Question à la réception', 'Réponse']],
@@ -58,10 +62,9 @@ export const generatePDF = async (store, mode, sendToBackend = false) => {
   // 2. Etat Elements
   if (Object.keys(store.etatAnswers).length > 0) {
     const tableData = Object.entries(store.etatAnswers).map(([k, v]) => {
-      // k est '0', '1', etc. On pourrait retrouver le nom exact si on passait la liste,
-      // pour simplifier on met "Element X". 
-      // Une amélioration serait de stocker le texte complet de l'élément dans le store.
-      return [`Élément ${parseInt(k)+1}`, v]
+      const index = parseInt(k, 10)
+      const elementText = store.currentEtatElements?.[index] || `Élément ${index + 1}`
+      return [elementText, v]
     })
     autoTable(doc, {
       startY: yPos,
@@ -76,7 +79,11 @@ export const generatePDF = async (store, mode, sendToBackend = false) => {
 
   // 3. General Questions
   if (Object.keys(store.generalAnswers).length > 0) {
-    const tableData = Object.entries(store.generalAnswers).map(([k, v]) => [`Question ${parseInt(k)+1}`, v])
+    const tableData = Object.entries(store.generalAnswers).map(([k, v]) => {
+      const index = parseInt(k, 10)
+      const questionText = store.generalQuestions?.[index] || `Question ${index + 1}`
+      return [questionText, v]
+    })
     autoTable(doc, {
       startY: yPos,
       head: [['Contrôle Général', 'Réponse']],
@@ -142,7 +149,7 @@ export const generatePDF = async (store, mode, sendToBackend = false) => {
       formData.append('text', 'Rapport PDF structuré en pièce jointe.')
       formData.append('to', 'contact@hopicile.fr')
 
-      const res = await fetch('http://localhost:3000/send-report', {
+      const res = await fetch('https://hopicile.r32-dev.fr/hopicile-tech/send-report', {
         method: 'POST',
         body: formData
       })
