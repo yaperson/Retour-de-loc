@@ -29,9 +29,9 @@ export const useFormStore = defineStore('form', () => {
   const etatElements = {
     lit: ["Barrières", "Potence", "Tête et pied de lit", "Châssis", "Moteur et câblage"],
     fauteuil_manuel: ["Roues", "Accoudoirs", "Freins", "Repose-pieds", "Toiles (assise et dossier)", "Châssis"],
-    fauteuil_electrique: ["Roues", "Accoudoirs", "Freins", "Repose-pieds", "Toiles (assise et dossier)", "Châssis", "Batterie", "Moteur et câblage"],
-    leve_personne: ["Structure", "Sangles", "Moteur et câblage", "Commande", "Roues"],
-    pompe_nutrition: ["Boitier", "Porte", "support", "Alimentation", "Rotor", "Segments"],
+    fauteuil_electrique: ["Roues", "Accoudoirs", "Repose-pieds", "assise et dossier", "Châssis", "Batteries", "Moteur et câblage"],
+    leve_personne: ["Structure", "Moteur et câblage", "Batteries", "Commande", "Roues"],
+    dehambulateur: ["Roues", "Freins", "Structure", "Poignées"],
     autre: ["État général des éléments"]
   }
 
