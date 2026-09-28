@@ -12,17 +12,19 @@ const scannerDivId = 'reader'
 const isScanning = ref(false)
 const errorMessage = ref('')
 
-// Contrôles matériel de la caméra (anti-grand angle / netteté)
-const hasZoom = ref(false)
+// ZOOM UNIVERSEL (Fonctionne sur 100% des téléphones : matériel si supporté, sinon numérique)
+const isSoftwareZoom = ref(false)
 const zoomMin = ref(1)
-const zoomMax = ref(1)
+const zoomMax = ref(3.5)
 const zoomStep = ref(0.1)
-const currentZoom = ref(1)
-const zoomPresets = ref([1, 2, 3])
+const currentZoom = ref(2.0) // 2x par défaut pour éliminer immédiatement l'effet grand-angle !
+const zoomPresets = ref([1, 1.5, 2, 2.5, 3])
 
+// Flash / Torche
 const hasTorch = ref(false)
 const isTorchOn = ref(false)
 
+// Gestion multi-caméras (Objectif 0.5x, 1x, 3x, etc.)
 const availableCameras = ref([])
 const currentCameraIndex = ref(0)
 const currentCameraLabel = ref('')
@@ -30,6 +32,35 @@ const currentCameraLabel = ref('')
 let html5QrCode = null
 let zoomFeature = null
 let torchFeature = null
+
+// Gestion du pincement pour zoomer (Pinch-to-zoom)
+let touchStartDist = 0
+let touchStartZoom = 2.0
+
+const onTouchStart = (e) => {
+  if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX
+    const dy = e.touches[0].clientY - e.touches[1].clientY
+    touchStartDist = Math.hypot(dx, dy)
+    touchStartZoom = currentZoom.value
+  }
+}
+
+const onTouchMove = (e) => {
+  if (e.touches.length === 2 && touchStartDist > 0) {
+    e.preventDefault()
+    const dx = e.touches[0].clientX - e.touches[1].clientX
+    const dy = e.touches[0].clientY - e.touches[1].clientY
+    const dist = Math.hypot(dx, dy)
+    const factor = dist / touchStartDist
+    const newZoom = Math.min(Math.max(touchStartZoom * factor, zoomMin.value), zoomMax.value)
+    applyZoom(Math.round(newZoom * 10) / 10)
+  }
+}
+
+const onTouchEnd = () => {
+  touchStartDist = 0
+}
 
 // Bip sonore doux à la détection
 const playBeep = () => {
@@ -48,7 +79,7 @@ const playBeep = () => {
     osc.start()
     osc.stop(ctx.currentTime + 0.15)
   } catch {
-    // AudioContext restreint si pas d'interaction préalable
+    // audio non critique
   }
 }
 
@@ -59,47 +90,103 @@ const vibrateSuccess = () => {
       navigator.vibrate([100, 50, 100])
     }
   } catch {
-    // ignore
+    // vibration non critique
+  }
+}
+
+// Mise à jour visuelle pour le zoom logiciel (agrandissement de la balise vidéo)
+const updateVisualZoom = () => {
+  const video = document.querySelector(`#${scannerDivId} video`)
+  if (!video) return
+
+  if (isSoftwareZoom.value) {
+    const z = currentZoom.value
+    video.style.transform = z > 1 ? `scale(${z})` : 'none'
+    video.style.transformOrigin = 'center center'
+    video.style.transition = 'transform 0.12s ease-out'
+  } else {
+    video.style.transform = 'none'
+  }
+}
+
+// Hook sur le canvas html5-qrcode pour décoder la zone zoomée même sans support matériel (ex: Safari iOS)
+const hookCanvasForSoftwareZoom = () => {
+  let ctx = null
+  if (html5QrCode && html5QrCode.context) {
+    ctx = html5QrCode.context
+  } else {
+    const canvas = document.querySelector(`#${scannerDivId} canvas`)
+    if (canvas) ctx = canvas.getContext('2d')
+  }
+
+  if (!ctx || ctx.__zoomHooked) return
+
+  const originalDrawImage = ctx.drawImage
+  ctx.__zoomHooked = true
+
+  ctx.drawImage = function (image, ...args) {
+    // foreverScan appelle drawImage avec 8 arguments (source X, Y, W, H, dest X, Y, W, H)
+    if (args.length === 8 && isSoftwareZoom.value && currentZoom.value > 1.01) {
+      const z = currentZoom.value
+      const sx = args[0]
+      const sy = args[1]
+      const sWidth = args[2]
+      const sHeight = args[3]
+      const dx = args[4]
+      const dy = args[5]
+      const dWidth = args[6]
+      const dHeight = args[7]
+
+      // Découper uniquement le centre correspondant au niveau de zoom
+      const cx = sx + sWidth / 2
+      const cy = sy + sHeight / 2
+      const zw = sWidth / z
+      const zh = sHeight / z
+      const zsx = Math.max(0, cx - zw / 2)
+      const zsy = Math.max(0, cy - zh / 2)
+
+      return originalDrawImage.call(this, image, zsx, zsy, zw, zh, dx, dy, dWidth, dHeight)
+    }
+
+    return originalDrawImage.apply(this, [image, ...args])
+  }
+}
+
+const applyZoom = async (val) => {
+  const num = Math.min(Math.max(Number(val), zoomMin.value), zoomMax.value)
+  currentZoom.value = Math.round(num * 10) / 10
+
+  if (!isSoftwareZoom.value && zoomFeature) {
+    try {
+      await zoomFeature.apply(currentZoom.value)
+    } catch (err) {
+      console.warn("Échec application zoom matériel, bascule en zoom logiciel:", err)
+      isSoftwareZoom.value = true
+      updateVisualZoom()
+    }
+  } else {
+    updateVisualZoom()
   }
 }
 
 const updateCapabilities = async () => {
   if (!html5QrCode || !html5QrCode.isScanning) return
 
+  // Par défaut, activer le zoom logiciel haute résolution (garanti sur tous téléphones)
+  isSoftwareZoom.value = true
+
   try {
     const caps = html5QrCode.getRunningTrackCameraCapabilities?.()
     
-    // Zoom matériel
+    // Vérifier si le zoom matériel natif est supporté par le navigateur (ex: Chrome Android)
     if (caps && caps.zoomFeature) {
-      zoomFeature = caps.zoomFeature()
-      if (zoomFeature && zoomFeature.isSupported()) {
-        hasZoom.value = true
-        zoomMin.value = zoomFeature.min() || 1
-        zoomMax.value = zoomFeature.max() || 1
-        zoomStep.value = zoomFeature.step() || 0.1
-        currentZoom.value = zoomFeature.value() || 1
-
-        // Calcul des paliers rapides disponibles
-        const presets = [1]
-        if (zoomMax.value >= 2) presets.push(2)
-        if (zoomMax.value >= 3) presets.push(3)
-        if (zoomMax.value >= 4) presets.push(4)
-        zoomPresets.value = presets
-
-        // SOLUTION CLÉ : Par défaut, appliquer le zoom 2x (ou le max disponible si < 2x)
-        // Les objectifs grand-angle modernes floutent à moins de 15 cm.
-        // Avec un zoom 2x, l'utilisateur se tient à 25-30 cm : mise au point ultra-nette !
-        const targetZoom = Math.min(2.0, zoomMax.value)
-        if (targetZoom > zoomMin.value) {
-          try {
-            await zoomFeature.apply(targetZoom)
-            currentZoom.value = targetZoom
-          } catch (e) {
-            console.warn("Impossible d'appliquer le zoom 2x par défaut:", e)
-          }
-        }
-      } else {
-        hasZoom.value = false
+      const zf = caps.zoomFeature()
+      if (zf && zf.isSupported()) {
+        zoomFeature = zf
+        zoomMin.value = zf.min() || 1
+        zoomMax.value = Math.max(zf.max() || 3, 3)
+        zoomStep.value = zf.step() || 0.1
+        isSoftwareZoom.value = false // Le matériel prend le relais
       }
     }
 
@@ -115,18 +202,14 @@ const updateCapabilities = async () => {
     }
   } catch (err) {
     console.warn("Erreur détection des capacités caméra:", err)
+    isSoftwareZoom.value = true
   }
-}
 
-const applyZoom = async (val) => {
-  if (!zoomFeature || !hasZoom.value) return
-  try {
-    const num = Math.min(Math.max(Number(val), zoomMin.value), zoomMax.value)
-    await zoomFeature.apply(num)
-    currentZoom.value = num
-  } catch (err) {
-    console.error("Erreur application du zoom:", err)
-  }
+  // Intercepter le canvas pour le décodage zoomé
+  hookCanvasForSoftwareZoom()
+
+  // Appliquer le zoom 2x par défaut
+  await applyZoom(2.0)
 }
 
 const toggleTorch = async () => {
@@ -136,7 +219,50 @@ const toggleTorch = async () => {
     await torchFeature.apply(nextState)
     isTorchOn.value = nextState
   } catch (err) {
-    console.error("Erreur bascule de la torche:", err)
+    console.error("Erreur bascule torche:", err)
+  }
+}
+
+const loadAvailableCameras = async () => {
+  try {
+    if (!navigator.mediaDevices?.enumerateDevices) return
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    const videoDevices = devices.filter(d => d.kind === 'videoinput')
+
+    if (videoDevices.length > 0) {
+      const backCams = videoDevices.filter(d => {
+        const lbl = (d.label || '').toLowerCase()
+        return !lbl.includes('front') && !lbl.includes('avant') && !lbl.includes('selfie') && !lbl.includes('user')
+      })
+
+      const list = backCams.length > 0 ? backCams : videoDevices
+      availableCameras.value = list.map((cam, idx) => {
+        let label = cam.label || `Objectif ${idx + 1}`
+        const lower = label.toLowerCase()
+        if (lower.includes('ultra') || lower.includes('0.5')) {
+          label = `Ultra Grand-Angle (0.5x)`
+        } else if (lower.includes('tele') || lower.includes('zoom')) {
+          label = `Téléobjectif`
+        } else if (lower.includes('back') || lower.includes('rear') || lower.includes('arrière')) {
+          label = `Capteur Principal (1x)`
+        }
+        return { id: cam.deviceId, label }
+      })
+
+      // Détecter la caméra actuellement active
+      const runningTrack = html5QrCode?.getRunningTrackSettings?.()
+      if (runningTrack?.deviceId) {
+        const found = availableCameras.value.findIndex(c => c.id === runningTrack.deviceId)
+        if (found !== -1) {
+          currentCameraIndex.value = found
+          currentCameraLabel.value = availableCameras.value[found].label
+        }
+      } else if (availableCameras.value.length > 0) {
+        currentCameraLabel.value = availableCameras.value[currentCameraIndex.value]?.label || ''
+      }
+    }
+  } catch (e) {
+    console.warn("Erreur chargement caméras:", e)
   }
 }
 
@@ -144,7 +270,7 @@ const switchCamera = async () => {
   if (availableCameras.value.length <= 1) return
   currentCameraIndex.value = (currentCameraIndex.value + 1) % availableCameras.value.length
   const nextCam = availableCameras.value[currentCameraIndex.value]
-  currentCameraLabel.value = nextCam.label || `Caméra ${currentCameraIndex.value + 1}`
+  currentCameraLabel.value = nextCam.label
 
   if (html5QrCode && html5QrCode.isScanning) {
     await stopScanOnly()
@@ -161,7 +287,6 @@ const stopScanOnly = async () => {
       console.error("Erreur arrêt scanner:", err)
     }
   }
-  hasZoom.value = false
   hasTorch.value = false
   isTorchOn.value = false
 }
@@ -191,16 +316,13 @@ const startCameraWithConfig = async (cameraConfig) => {
     verbose: false
   })
 
-  // Configuration de numérisation optimisée pour codes-barres 1D et 2D
   const scanConfig = {
     fps: 15,
-    // Zone rectangulaire panoramique adaptée aux étiquettes codes-barres
     qrbox: (viewfinderWidth, viewfinderHeight) => {
       const width = Math.floor(Math.min(viewfinderWidth * 0.88, 320))
       const height = Math.floor(Math.min(viewfinderHeight * 0.45, 150))
       return { width: Math.max(width, 220), height: Math.max(height, 90) }
     },
-    // Contraintes haute résolution pour que les barres fines soient nettes
     videoConstraints: {
       ...cameraConfig,
       width: { min: 640, ideal: 1920 },
@@ -219,36 +341,11 @@ const startCameraWithConfig = async (cameraConfig) => {
       emit('scanned', decodedText)
       stopScan()
     },
-    () => {
-      // Ignorer les échecs continus normaux entre chaque frame
-    }
+    () => {}
   )
 
-  // Une fois la caméra lancée, rafraîchir les capacités matérielles et la liste des caméras
   await updateCapabilities()
-
-  try {
-    const devices = await Html5Qrcode.getCameras()
-    if (devices && devices.length > 0) {
-      // Filtrer pour ne garder que les caméras arrières si possible
-      const rearCameras = devices.filter(d => {
-        const lbl = (d.label || '').toLowerCase()
-        return !lbl.includes('front') && !lbl.includes('avant') && !lbl.includes('selfie')
-      })
-      availableCameras.value = rearCameras.length > 0 ? rearCameras : devices
-      
-      const settings = html5QrCode.getRunningTrackSettings?.()
-      if (settings?.deviceId) {
-        const foundIdx = availableCameras.value.findIndex(d => d.id === settings.deviceId)
-        if (foundIdx !== -1) {
-          currentCameraIndex.value = foundIdx
-          currentCameraLabel.value = availableCameras.value[foundIdx].label || `Caméra ${foundIdx + 1}`
-        }
-      }
-    }
-  } catch (e) {
-    console.warn("Échec récupération des caméras:", e)
-  }
+  await loadAvailableCameras()
 }
 
 const startScan = async () => {
@@ -257,20 +354,18 @@ const startScan = async () => {
   await nextTick()
 
   try {
-    // Si on a déjà identifié une caméra, l'utiliser, sinon "environment"
     const targetConfig = availableCameras.value.length > 0 && availableCameras.value[currentCameraIndex.value]
       ? { deviceId: { exact: availableCameras.value[currentCameraIndex.value].id } }
       : { facingMode: "environment" }
 
     await startCameraWithConfig(targetConfig)
   } catch (err) {
-    console.error("Erreur lors du démarrage du scanner:", err)
-    // Tentative de secours avec contrainte basique si la résolution haute a échoué
+    console.error("Erreur démarrage scanner:", err)
     try {
       await startCameraWithConfig({ facingMode: "environment" })
     } catch (fallbackErr) {
-      console.error("Échec du secours scanner:", fallbackErr)
-      errorMessage.value = "Impossible d'accéder à la caméra. Vérifiez les autorisations."
+      console.error("Échec secours scanner:", fallbackErr)
+      errorMessage.value = "Impossible d'accéder à la caméra. Vérifiez les autorisations du navigateur."
       await stopScan()
     }
   }
@@ -291,9 +386,9 @@ onBeforeUnmount(() => {
           type="button" 
           class="tool-btn" 
           @click="switchCamera" 
-          title="Changer d'objectif / caméra"
+          title="Changer d'objectif"
         >
-          🔄 {{ currentCameraLabel ? currentCameraLabel.slice(0, 18) : 'Changer d\'objectif' }}
+          🔄 {{ currentCameraLabel || 'Changer capteur' }}
         </button>
 
         <button 
@@ -308,39 +403,51 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <!-- Zone de visée vidéo -->
-      <div id="reader" class="scanner-viewport"></div>
+      <!-- Zone de visée vidéo avec support du pincement pour zoomer -->
+      <div 
+        id="reader" 
+        class="scanner-viewport"
+        @touchstart="onTouchStart"
+        @touchmove="onTouchMove"
+        @touchend="onTouchEnd"
+      ></div>
 
-      <!-- Contrôles du Zoom matériel (Crucial contre le grand-angle) -->
-      <div v-if="hasZoom" class="zoom-panel">
-        <span class="zoom-label">🔍 Zoom :</span>
-        <div class="zoom-presets">
-          <button 
-            v-for="preset in zoomPresets" 
-            :key="preset" 
-            type="button" 
-            class="zoom-chip" 
-            :class="{ active: Math.abs(currentZoom - preset) < 0.2 }"
-            @click="applyZoom(preset)"
-          >
-            {{ preset }}x
-          </button>
+      <!-- Panneau de Zoom Universel (Toujours affiché) -->
+      <div class="zoom-panel">
+        <div class="zoom-header">
+          <span class="zoom-title">🔍 Zoom : <strong>{{ currentZoom.toFixed(1) }}x</strong></span>
+          <span class="zoom-badge">{{ isSoftwareZoom ? 'HD Numérique' : 'Matériel' }}</span>
         </div>
-        <input 
-          type="range" 
-          class="zoom-slider" 
-          :min="zoomMin" 
-          :max="zoomMax" 
-          :step="zoomStep" 
-          :value="currentZoom" 
-          @input="applyZoom($event.target.value)" 
-        />
-        <span class="zoom-val">{{ currentZoom.toFixed(1) }}x</span>
+
+        <div class="zoom-controls">
+          <div class="zoom-presets">
+            <button 
+              v-for="preset in zoomPresets" 
+              :key="preset" 
+              type="button" 
+              class="zoom-chip" 
+              :class="{ active: Math.abs(currentZoom - preset) < 0.2 }"
+              @click="applyZoom(preset)"
+            >
+              {{ preset }}x
+            </button>
+          </div>
+
+          <input 
+            type="range" 
+            class="zoom-slider" 
+            :min="zoomMin" 
+            :max="zoomMax" 
+            :step="zoomStep" 
+            :value="currentZoom" 
+            @input="applyZoom($event.target.value)" 
+          />
+        </div>
       </div>
 
-      <!-- Conseil d'utilisation anti-flou -->
+      <!-- Guide utilisateur anti-flou -->
       <div class="scanner-tip">
-        <span>📐 <strong>Conseil netteté :</strong> tenez le téléphone à <strong>20-25 cm</strong> et utilisez le <strong>Zoom 2x</strong> pour éliminer l'effet grand-angle et obtenir un focus parfait.</span>
+        <span>📐 <strong>Anti-flou :</strong> gardez le téléphone à <strong>20–25 cm</strong> du code. Le <strong>Zoom 2x</strong> compense l'objectif grand angle pour garder les barres parfaitement nettes.</span>
       </div>
     </div>
 
@@ -369,7 +476,7 @@ onBeforeUnmount(() => {
   position: relative;
   background: #0f172a;
   border-radius: var(--radius-md);
-  padding: 0.5rem;
+  padding: 0.6rem;
   box-shadow: var(--shadow-md);
   margin-bottom: 0.5rem;
 }
@@ -412,23 +519,51 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md);
   overflow: hidden;
   background: #000000;
+  position: relative;
+  touch-action: none; /* Crucial pour le pinch-to-zoom sans scroll parasite */
+}
+
+:deep(video) {
+  width: 100% !important;
+  height: auto !important;
+  display: block;
 }
 
 .zoom-panel {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-  padding: 0.4rem 0.6rem;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.75rem;
   background: rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-md);
   color: #f8fafc;
 }
 
-.zoom-label {
-  font-size: 0.8rem;
+.zoom-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.zoom-title {
+  font-size: 0.85rem;
+}
+
+.zoom-badge {
+  font-size: 0.65rem;
+  background: rgba(14, 165, 233, 0.3);
+  color: #38bdf8;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
   font-weight: 600;
-  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .zoom-presets {
@@ -440,37 +575,36 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.15);
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 0.2rem 0.5rem;
+  padding: 0.25rem 0.55rem;
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
+  transition: all 0.15s;
+}
+
+.zoom-chip:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .zoom-chip.active {
-  background: var(--primary-color);
-  border-color: var(--primary-color);
+  background: var(--primary-color, #0ea5e9);
+  border-color: var(--primary-color, #0ea5e9);
   color: #ffffff;
 }
 
 .zoom-slider {
   flex: 1;
-  accent-color: var(--primary-color);
+  accent-color: var(--primary-color, #0ea5e9);
   cursor: pointer;
-}
-
-.zoom-val {
-  font-size: 0.75rem;
-  font-family: monospace;
-  min-width: 2.2rem;
-  text-align: right;
+  height: 6px;
 }
 
 .scanner-tip {
   margin-top: 0.5rem;
   padding: 0.5rem 0.75rem;
   background: rgba(14, 165, 233, 0.15);
-  border-left: 3px solid var(--primary-color);
+  border-left: 3px solid var(--primary-color, #0ea5e9);
   border-radius: 4px;
   color: #e0f2fe;
   font-size: 0.75rem;
@@ -489,9 +623,9 @@ onBeforeUnmount(() => {
 }
 
 .danger {
-  background-color: var(--danger);
+  background-color: var(--danger, #ef4444);
   color: white;
-  border-color: var(--danger);
+  border-color: var(--danger, #ef4444);
 }
 .danger:hover {
   background-color: #dc2626;
