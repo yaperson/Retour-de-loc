@@ -9,58 +9,33 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'scanned'])
 
 const scannerDivId = 'reader'
-const isScanning = ref(false)
+const nativeInputRef = ref(null)
+
+// États d'analyse photo
+const isAnalyzing = ref(false)
+const photoPreviewUrl = ref(null)
+const lastDetectedCode = ref('')
 const errorMessage = ref('')
+const successMessage = ref('')
 
-// ZOOM UNIVERSEL (Fonctionne sur 100% des téléphones : matériel si supporté, sinon numérique)
-const isSoftwareZoom = ref(false)
-const zoomMin = ref(1)
-const zoomMax = ref(3.5)
-const zoomStep = ref(0.1)
-const currentZoom = ref(2.0) // 2x par défaut pour éliminer immédiatement l'effet grand-angle !
-const zoomPresets = ref([1, 1.5, 2, 2.5, 3])
+// Mode scan vidéo direct (optionnel)
+const showLiveScanner = ref(false)
+const isLiveScanning = ref(false)
+let liveHtml5QrCode = null
 
-// Flash / Torche
-const hasTorch = ref(false)
-const isTorchOn = ref(false)
-
-// Gestion multi-caméras (Objectif 0.5x, 1x, 3x, etc.)
-const availableCameras = ref([])
-const currentCameraIndex = ref(0)
-const currentCameraLabel = ref('')
-
-let html5QrCode = null
-let zoomFeature = null
-let torchFeature = null
-
-// Gestion du pincement pour zoomer (Pinch-to-zoom)
-let touchStartDist = 0
-let touchStartZoom = 2.0
-
-const onTouchStart = (e) => {
-  if (e.touches.length === 2) {
-    const dx = e.touches[0].clientX - e.touches[1].clientX
-    const dy = e.touches[0].clientY - e.touches[1].clientY
-    touchStartDist = Math.hypot(dx, dy)
-    touchStartZoom = currentZoom.value
-  }
-}
-
-const onTouchMove = (e) => {
-  if (e.touches.length === 2 && touchStartDist > 0) {
-    e.preventDefault()
-    const dx = e.touches[0].clientX - e.touches[1].clientX
-    const dy = e.touches[0].clientY - e.touches[1].clientY
-    const dist = Math.hypot(dx, dy)
-    const factor = dist / touchStartDist
-    const newZoom = Math.min(Math.max(touchStartZoom * factor, zoomMin.value), zoomMax.value)
-    applyZoom(Math.round(newZoom * 10) / 10)
-  }
-}
-
-const onTouchEnd = () => {
-  touchStartDist = 0
-}
+// Formats de codes-barres ciblés
+const supportedFormats = [
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A,
+  Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.ITF,
+  Html5QrcodeSupportedFormats.CODABAR,
+  Html5QrcodeSupportedFormats.QR_CODE,
+  Html5QrcodeSupportedFormats.DATA_MATRIX
+]
 
 // Bip sonore doux à la détection
 const playBeep = () => {
@@ -79,7 +54,7 @@ const playBeep = () => {
     osc.start()
     osc.stop(ctx.currentTime + 0.15)
   } catch {
-    // audio non critique
+    // non critique
   }
 }
 
@@ -90,437 +65,518 @@ const vibrateSuccess = () => {
       navigator.vibrate([100, 50, 100])
     }
   } catch {
-    // vibration non critique
+    // non critique
   }
 }
 
-// Mise à jour visuelle pour le zoom logiciel (agrandissement de la balise vidéo)
-const updateVisualZoom = () => {
-  const video = document.querySelector(`#${scannerDivId} video`)
-  if (!video) return
-
-  if (isSoftwareZoom.value) {
-    const z = currentZoom.value
-    video.style.transform = z > 1 ? `scale(${z})` : 'none'
-    video.style.transformOrigin = 'center center'
-    video.style.transition = 'transform 0.12s ease-out'
-  } else {
-    video.style.transform = 'none'
+// ==========================================
+// 1. DÉCLENCHEMENT DE L'APPAREIL PHOTO NATIF
+// ==========================================
+const openNativeCamera = () => {
+  errorMessage.value = ''
+  successMessage.value = ''
+  if (nativeInputRef.value) {
+    nativeInputRef.value.click()
   }
 }
 
-// Hook sur le canvas html5-qrcode pour décoder la zone zoomée même sans support matériel (ex: Safari iOS)
-const hookCanvasForSoftwareZoom = () => {
-  let ctx = null
-  if (html5QrCode && html5QrCode.context) {
-    ctx = html5QrCode.context
-  } else {
-    const canvas = document.querySelector(`#${scannerDivId} canvas`)
-    if (canvas) ctx = canvas.getContext('2d')
-  }
+// Prétraitement / Recadrage intelligent en mémoire pour optimiser la détection
+const createOptimizedCanvasBlob = async (file, options = {}) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      try {
+        const { cropCenter = false, maxDim = 1600, enhanceContrast = false } = options
+        let srcX = 0, srcY = 0, srcW = img.width, srcH = img.height
 
-  if (!ctx || ctx.__zoomHooked) return
+        if (cropCenter) {
+          // Recadrer le centre (75% largeur, 55% hauteur) où se trouve généralement le code
+          srcW = Math.floor(img.width * 0.75)
+          srcH = Math.floor(img.height * 0.55)
+          srcX = Math.floor((img.width - srcW) / 2)
+          srcY = Math.floor((img.height - srcH) / 2)
+        }
 
-  const originalDrawImage = ctx.drawImage
-  ctx.__zoomHooked = true
+        // Redimensionner si la photo du smartphone est gigantesque (ex: 48 MPixels)
+        let targetW = srcW
+        let targetH = srcH
+        if (targetW > maxDim || targetH > maxDim) {
+          if (targetW >= targetH) {
+            targetH = Math.round((targetH / targetW) * maxDim)
+            targetW = maxDim
+          } else {
+            targetW = Math.round((targetW / targetH) * maxDim)
+            targetH = maxDim
+          }
+        }
 
-  ctx.drawImage = function (image, ...args) {
-    // foreverScan appelle drawImage avec 8 arguments (source X, Y, W, H, dest X, Y, W, H)
-    if (args.length === 8 && isSoftwareZoom.value && currentZoom.value > 1.01) {
-      const z = currentZoom.value
-      const sx = args[0]
-      const sy = args[1]
-      const sWidth = args[2]
-      const sHeight = args[3]
-      const dx = args[4]
-      const dy = args[5]
-      const dWidth = args[6]
-      const dHeight = args[7]
+        const canvas = document.createElement('canvas')
+        canvas.width = targetW
+        canvas.height = targetH
+        const ctx = canvas.getContext('2d')
 
-      // Découper uniquement le centre correspondant au niveau de zoom
-      const cx = sx + sWidth / 2
-      const cy = sy + sHeight / 2
-      const zw = sWidth / z
-      const zh = sHeight / z
-      const zsx = Math.max(0, cx - zw / 2)
-      const zsy = Math.max(0, cy - zh / 2)
+        if (enhanceContrast) {
+          ctx.filter = 'contrast(1.35) brightness(1.05)'
+        }
 
-      return originalDrawImage.call(this, image, zsx, zsy, zw, zh, dx, dy, dWidth, dHeight)
+        ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, targetW, targetH)
+
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob)
+          else reject(new Error("Erreur génération blob"))
+        }, 'image/jpeg', 0.92)
+      } catch (e) {
+        reject(e)
+      }
     }
-
-    return originalDrawImage.apply(this, [image, ...args])
-  }
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url)
+      reject(e)
+    }
+    img.src = url
+  })
 }
 
-const applyZoom = async (val) => {
-  const num = Math.min(Math.max(Number(val), zoomMin.value), zoomMax.value)
-  currentZoom.value = Math.round(num * 10) / 10
-
-  if (!isSoftwareZoom.value && zoomFeature) {
+// Analyse multi-passe d'une image
+const decodeBarcodeFromImage = async (file) => {
+  // Passe 1 : BarcodeDetector natif du navigateur si supporté (accélération GPU/NPU)
+  if ('BarcodeDetector' in window) {
     try {
-      await zoomFeature.apply(currentZoom.value)
-    } catch (err) {
-      console.warn("Échec application zoom matériel, bascule en zoom logiciel:", err)
-      isSoftwareZoom.value = true
-      updateVisualZoom()
-    }
-  } else {
-    updateVisualZoom()
-  }
-}
-
-const updateCapabilities = async () => {
-  if (!html5QrCode || !html5QrCode.isScanning) return
-
-  // Par défaut, activer le zoom logiciel haute résolution (garanti sur tous téléphones)
-  isSoftwareZoom.value = true
-
-  try {
-    const caps = html5QrCode.getRunningTrackCameraCapabilities?.()
-    
-    // Vérifier si le zoom matériel natif est supporté par le navigateur (ex: Chrome Android)
-    if (caps && caps.zoomFeature) {
-      const zf = caps.zoomFeature()
-      if (zf && zf.isSupported()) {
-        zoomFeature = zf
-        zoomMin.value = zf.min() || 1
-        zoomMax.value = Math.max(zf.max() || 3, 3)
-        zoomStep.value = zf.step() || 0.1
-        isSoftwareZoom.value = false // Le matériel prend le relais
-      }
-    }
-
-    // Lampe torche / Flash
-    if (caps && caps.torchFeature) {
-      torchFeature = caps.torchFeature()
-      if (torchFeature && torchFeature.isSupported()) {
-        hasTorch.value = true
-        isTorchOn.value = torchFeature.value() || false
-      } else {
-        hasTorch.value = false
-      }
-    }
-  } catch (err) {
-    console.warn("Erreur détection des capacités caméra:", err)
-    isSoftwareZoom.value = true
-  }
-
-  // Intercepter le canvas pour le décodage zoomé
-  hookCanvasForSoftwareZoom()
-
-  // Appliquer le zoom 2x par défaut
-  await applyZoom(2.0)
-}
-
-const toggleTorch = async () => {
-  if (!torchFeature || !hasTorch.value) return
-  try {
-    const nextState = !isTorchOn.value
-    await torchFeature.apply(nextState)
-    isTorchOn.value = nextState
-  } catch (err) {
-    console.error("Erreur bascule torche:", err)
-  }
-}
-
-const loadAvailableCameras = async () => {
-  try {
-    if (!navigator.mediaDevices?.enumerateDevices) return
-    const devices = await navigator.mediaDevices.enumerateDevices()
-    const videoDevices = devices.filter(d => d.kind === 'videoinput')
-
-    if (videoDevices.length > 0) {
-      const backCams = videoDevices.filter(d => {
-        const lbl = (d.label || '').toLowerCase()
-        return !lbl.includes('front') && !lbl.includes('avant') && !lbl.includes('selfie') && !lbl.includes('user')
+      const detector = new window.BarcodeDetector({
+        formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'qr_code', 'data_matrix']
       })
-
-      const list = backCams.length > 0 ? backCams : videoDevices
-      availableCameras.value = list.map((cam, idx) => {
-        let label = cam.label || `Objectif ${idx + 1}`
-        const lower = label.toLowerCase()
-        if (lower.includes('ultra') || lower.includes('0.5')) {
-          label = `Ultra Grand-Angle (0.5x)`
-        } else if (lower.includes('tele') || lower.includes('zoom')) {
-          label = `Téléobjectif`
-        } else if (lower.includes('back') || lower.includes('rear') || lower.includes('arrière')) {
-          label = `Capteur Principal (1x)`
-        }
-        return { id: cam.deviceId, label }
-      })
-
-      // Détecter la caméra actuellement active
-      const runningTrack = html5QrCode?.getRunningTrackSettings?.()
-      if (runningTrack?.deviceId) {
-        const found = availableCameras.value.findIndex(c => c.id === runningTrack.deviceId)
-        if (found !== -1) {
-          currentCameraIndex.value = found
-          currentCameraLabel.value = availableCameras.value[found].label
-        }
-      } else if (availableCameras.value.length > 0) {
-        currentCameraLabel.value = availableCameras.value[currentCameraIndex.value]?.label || ''
+      const bitmap = await createImageBitmap(file)
+      const results = await detector.detect(bitmap)
+      if (results && results.length > 0 && results[0].rawValue) {
+        return results[0].rawValue
       }
+    } catch (e) {
+      console.warn("BarcodeDetector passe 1 a échoué:", e)
+    }
+  }
+
+  // Passe 2 : Html5Qrcode.scanFile sur l'image d'origine
+  try {
+    const qrEngine = new Html5Qrcode(scannerDivId, {
+      formatsToSupport: supportedFormats,
+      useBarCodeDetectorIfSupported: true,
+      verbose: false
+    })
+    const res = await qrEngine.scanFile(file, false)
+    qrEngine.clear()
+    if (res) return res
+  } catch (e) {
+    console.warn("Html5Qrcode passe 2 a échoué:", e)
+  }
+
+  // Passe 3 : Recadrage central optimisé (indispensable si la photo a été prise à 20-30 cm)
+  try {
+    const croppedBlob = await createOptimizedCanvasBlob(file, { cropCenter: true, maxDim: 1600 })
+    if (croppedBlob) {
+      const croppedFile = new File([croppedBlob], "cropped.jpg", { type: "image/jpeg" })
+
+      if ('BarcodeDetector' in window) {
+        try {
+          const detector = new window.BarcodeDetector()
+          const bmp = await createImageBitmap(croppedFile)
+          const results = await detector.detect(bmp)
+          if (results && results.length > 0 && results[0].rawValue) {
+            return results[0].rawValue
+          }
+        } catch {}
+      }
+
+      const qrEngine = new Html5Qrcode(scannerDivId, {
+        formatsToSupport: supportedFormats,
+        useBarCodeDetectorIfSupported: true,
+        verbose: false
+      })
+      const res = await qrEngine.scanFile(croppedFile, false)
+      qrEngine.clear()
+      if (res) return res
     }
   } catch (e) {
-    console.warn("Erreur chargement caméras:", e)
+    console.warn("Passe 3 (recadrage) a échoué:", e)
   }
-}
 
-const switchCamera = async () => {
-  if (availableCameras.value.length <= 1) return
-  currentCameraIndex.value = (currentCameraIndex.value + 1) % availableCameras.value.length
-  const nextCam = availableCameras.value[currentCameraIndex.value]
-  currentCameraLabel.value = nextCam.label
-
-  if (html5QrCode && html5QrCode.isScanning) {
-    await stopScanOnly()
-    await startCameraWithConfig({ deviceId: { exact: nextCam.id } })
-  }
-}
-
-const stopScanOnly = async () => {
-  if (html5QrCode && html5QrCode.isScanning) {
-    try {
-      await html5QrCode.stop()
-      html5QrCode.clear()
-    } catch (err) {
-      console.error("Erreur arrêt scanner:", err)
+  // Passe 4 : Contraste renforcé (au cas où l'éclairage était sombre)
+  try {
+    const contrastBlob = await createOptimizedCanvasBlob(file, { cropCenter: true, maxDim: 1600, enhanceContrast: true })
+    if (contrastBlob) {
+      const contrastFile = new File([contrastBlob], "contrast.jpg", { type: "image/jpeg" })
+      const qrEngine = new Html5Qrcode(scannerDivId, {
+        formatsToSupport: supportedFormats,
+        useBarCodeDetectorIfSupported: true,
+        verbose: false
+      })
+      const res = await qrEngine.scanFile(contrastFile, false)
+      qrEngine.clear()
+      if (res) return res
     }
+  } catch (e) {
+    console.warn("Passe 4 (contraste) a échoué:", e)
   }
-  hasTorch.value = false
-  isTorchOn.value = false
+
+  throw new Error("Aucun code-barres lisible trouvé sur cette photo.")
 }
 
-const stopScan = async () => {
-  await stopScanOnly()
-  isScanning.value = false
+// Réception de la photo prise par l'appareil photo du téléphone
+const onPhotoCaptured = async (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  isAnalyzing.value = true
   errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    if (photoPreviewUrl.value) {
+      URL.revokeObjectURL(photoPreviewUrl.value)
+    }
+    photoPreviewUrl.value = URL.createObjectURL(file)
+
+    const code = await decodeBarcodeFromImage(file)
+    if (code) {
+      playBeep()
+      vibrateSuccess()
+      lastDetectedCode.value = code
+      successMessage.value = `Code détecté : ${code}`
+      emit('update:modelValue', code)
+      emit('scanned', code)
+    }
+  } catch (err) {
+    console.warn("Erreur analyse photo:", err)
+    errorMessage.value = "Aucun code-barres détecté sur la photo. Prenez la photo d'un peu plus près ou avec le zoom (2x), en tapotant sur l'écran pour que les barres soient bien nettes."
+  } finally {
+    isAnalyzing.value = false
+    if (event.target) event.target.value = ''
+  }
 }
 
-const startCameraWithConfig = async (cameraConfig) => {
-  const formats = [
-    Html5QrcodeSupportedFormats.CODE_128,
-    Html5QrcodeSupportedFormats.CODE_39,
-    Html5QrcodeSupportedFormats.EAN_13,
-    Html5QrcodeSupportedFormats.EAN_8,
-    Html5QrcodeSupportedFormats.UPC_A,
-    Html5QrcodeSupportedFormats.UPC_E,
-    Html5QrcodeSupportedFormats.ITF,
-    Html5QrcodeSupportedFormats.QR_CODE,
-    Html5QrcodeSupportedFormats.DATA_MATRIX
-  ]
+// ==========================================
+// 2. SCAN VIDÉO EN DIRECT (ALTERNATIVE)
+// ==========================================
+const toggleLiveScan = async () => {
+  if (isLiveScanning.value) {
+    await stopLiveScan()
+  } else {
+    showLiveScanner.value = true
+    await startLiveScan()
+  }
+}
 
-  html5QrCode = new Html5Qrcode(scannerDivId, {
-    formatsToSupport: formats,
+const startLiveScan = async () => {
+  isLiveScanning.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+  await nextTick()
+
+  liveHtml5QrCode = new Html5Qrcode(scannerDivId, {
+    formatsToSupport: supportedFormats,
     useBarCodeDetectorIfSupported: true,
     verbose: false
   })
 
-  const scanConfig = {
-    fps: 15,
-    qrbox: (viewfinderWidth, viewfinderHeight) => {
-      const width = Math.floor(Math.min(viewfinderWidth * 0.88, 320))
-      const height = Math.floor(Math.min(viewfinderHeight * 0.45, 150))
-      return { width: Math.max(width, 220), height: Math.max(height, 90) }
-    },
-    videoConstraints: {
-      ...cameraConfig,
-      width: { min: 640, ideal: 1920 },
-      height: { min: 480, ideal: 1080 },
-      focusMode: { ideal: "continuous" }
-    }
+  try {
+    await liveHtml5QrCode.start(
+      { facingMode: "environment" },
+      {
+        fps: 15,
+        qrbox: (viewfinderWidth, viewfinderHeight) => ({
+          width: Math.floor(Math.min(viewfinderWidth * 0.88, 320)),
+          height: Math.floor(Math.min(viewfinderHeight * 0.45, 140))
+        }),
+        videoConstraints: {
+          facingMode: "environment",
+          width: { min: 640, ideal: 1920 },
+          height: { min: 480, ideal: 1080 }
+        }
+      },
+      (decodedText) => {
+        playBeep()
+        vibrateSuccess()
+        lastDetectedCode.value = decodedText
+        successMessage.value = `Code détecté : ${decodedText}`
+        emit('update:modelValue', decodedText)
+        emit('scanned', decodedText)
+        stopLiveScan()
+      },
+      () => {}
+    )
+  } catch (err) {
+    console.error("Erreur scanner direct:", err)
+    errorMessage.value = "Impossible d'accéder au flux vidéo en direct. Utilisez plutôt le bouton photo."
+    await stopLiveScan()
   }
-
-  await html5QrCode.start(
-    cameraConfig,
-    scanConfig,
-    (decodedText) => {
-      playBeep()
-      vibrateSuccess()
-      emit('update:modelValue', decodedText)
-      emit('scanned', decodedText)
-      stopScan()
-    },
-    () => {}
-  )
-
-  await updateCapabilities()
-  await loadAvailableCameras()
 }
 
-const startScan = async () => {
-  errorMessage.value = ''
-  isScanning.value = true
-  await nextTick()
-
-  try {
-    const targetConfig = availableCameras.value.length > 0 && availableCameras.value[currentCameraIndex.value]
-      ? { deviceId: { exact: availableCameras.value[currentCameraIndex.value].id } }
-      : { facingMode: "environment" }
-
-    await startCameraWithConfig(targetConfig)
-  } catch (err) {
-    console.error("Erreur démarrage scanner:", err)
+const stopLiveScan = async () => {
+  if (liveHtml5QrCode && liveHtml5QrCode.isScanning) {
     try {
-      await startCameraWithConfig({ facingMode: "environment" })
-    } catch (fallbackErr) {
-      console.error("Échec secours scanner:", fallbackErr)
-      errorMessage.value = "Impossible d'accéder à la caméra. Vérifiez les autorisations du navigateur."
-      await stopScan()
+      await liveHtml5QrCode.stop()
+      liveHtml5QrCode.clear()
+    } catch (err) {
+      console.error(err)
     }
   }
+  isLiveScanning.value = false
+  showLiveScanner.value = false
 }
 
 onBeforeUnmount(() => {
-  stopScan()
+  if (photoPreviewUrl.value) {
+    URL.revokeObjectURL(photoPreviewUrl.value)
+  }
+  stopLiveScan()
 })
 </script>
 
 <template>
   <div class="scanner-container">
-    <div v-if="isScanning" class="scanner-wrapper">
-      <!-- Barre d'outils caméra : Changement capteur + Lampe torche -->
-      <div class="scanner-toolbar">
-        <button 
-          v-if="availableCameras.length > 1" 
-          type="button" 
-          class="tool-btn" 
-          @click="switchCamera" 
-          title="Changer d'objectif"
-        >
-          🔄 {{ currentCameraLabel || 'Changer capteur' }}
-        </button>
+    <!-- Input invisible déclenchant l'application appareil photo native du smartphone -->
+    <input 
+      ref="nativeInputRef"
+      type="file" 
+      accept="image/*" 
+      capture="environment" 
+      class="hidden-file-input"
+      @change="onPhotoCaptured"
+    />
 
-        <button 
-          v-if="hasTorch" 
-          type="button" 
-          class="tool-btn" 
-          :class="{ active: isTorchOn }" 
-          @click="toggleTorch" 
-          title="Éclairer avec le flash"
-        >
-          {{ isTorchOn ? '🔦 Lampe ON' : '💡 Lampe OFF' }}
-        </button>
-      </div>
-
-      <!-- Zone de visée vidéo avec support du pincement pour zoomer -->
-      <div 
-        id="reader" 
-        class="scanner-viewport"
-        @touchstart="onTouchStart"
-        @touchmove="onTouchMove"
-        @touchend="onTouchEnd"
-      ></div>
-
-      <!-- Panneau de Zoom Universel (Toujours affiché) -->
-      <div class="zoom-panel">
-        <div class="zoom-header">
-          <span class="zoom-title">🔍 Zoom : <strong>{{ currentZoom.toFixed(1) }}x</strong></span>
-          <span class="zoom-badge">{{ isSoftwareZoom ? 'HD Numérique' : 'Matériel' }}</span>
-        </div>
-
-        <div class="zoom-controls">
-          <div class="zoom-presets">
-            <button 
-              v-for="preset in zoomPresets" 
-              :key="preset" 
-              type="button" 
-              class="zoom-chip" 
-              :class="{ active: Math.abs(currentZoom - preset) < 0.2 }"
-              @click="applyZoom(preset)"
-            >
-              {{ preset }}x
-            </button>
-          </div>
-
-          <input 
-            type="range" 
-            class="zoom-slider" 
-            :min="zoomMin" 
-            :max="zoomMax" 
-            :step="zoomStep" 
-            :value="currentZoom" 
-            @input="applyZoom($event.target.value)" 
-          />
-        </div>
-      </div>
-
-      <!-- Guide utilisateur anti-flou -->
-      <div class="scanner-tip">
-        <span>📐 <strong>Anti-flou :</strong> gardez le téléphone à <strong>20–25 cm</strong> du code. Le <strong>Zoom 2x</strong> compense l'objectif grand angle pour garder les barres parfaitement nettes.</span>
-      </div>
-    </div>
-
-    <div v-if="errorMessage" class="scanner-error">
-      {{ errorMessage }}
-    </div>
-    
+    <!-- BOUTON PRINCIPAL : Prendre en photo avec l'app photo native -->
     <button 
       type="button" 
-      class="action-btn" 
-      :class="isScanning ? 'danger' : 'primary'"
-      style="width: 100%; margin-top: 1rem;" 
-      @click="isScanning ? stopScan() : startScan()"
+      class="native-photo-btn"
+      :disabled="isAnalyzing"
+      @click="openNativeCamera"
     >
-      {{ isScanning ? '✖️ Arrêter le scan' : '📷 Scanner code-barres' }}
+      <span class="btn-icon">📷</span>
+      <div class="btn-content">
+        <span class="btn-title">Prendre en photo le code-barres</span>
+        <span class="btn-sub">Ouvre l'appareil photo avec autofocus et zoom natifs</span>
+      </div>
     </button>
+
+    <!-- Indicateur d'analyse en cours -->
+    <div v-if="isAnalyzing" class="status-card analyzing">
+      <div class="spinner"></div>
+      <div class="status-text">
+        <strong>Analyse du code-barres en cours...</strong>
+        <span>Reconnaissance haute résolution des barres</span>
+      </div>
+    </div>
+
+    <!-- Message de succès -->
+    <div v-if="successMessage && !isAnalyzing" class="status-card success">
+      <span class="status-icon">✅</span>
+      <div class="status-text">
+        <strong>{{ successMessage }}</strong>
+        <span>Numéro de série enregistré avec succès !</span>
+      </div>
+    </div>
+
+    <!-- Message d'erreur avec bouton pour recommencer -->
+    <div v-if="errorMessage && !isAnalyzing" class="status-card error">
+      <span class="status-icon">⚠️</span>
+      <div class="status-text">
+        <strong>Code non détecté</strong>
+        <span>{{ errorMessage }}</span>
+        <button type="button" class="retry-btn" @click="openNativeCamera">
+          🔄 Reprendre une photo
+        </button>
+      </div>
+    </div>
+
+    <!-- Aperçu de la photo prise (si disponible) -->
+    <div v-if="photoPreviewUrl && !isLiveScanning" class="photo-preview-wrapper">
+      <img :src="photoPreviewUrl" alt="Photo code-barres" class="photo-preview-img" />
+    </div>
+
+    <!-- DIV NÉCESSAIRE POUR Html5Qrcode (invisible ou visible selon mode) -->
+    <div 
+      :id="scannerDivId" 
+      class="scanner-viewport"
+      :style="{ display: showLiveScanner && isLiveScanning ? 'block' : 'none' }"
+    ></div>
+
+    <!-- OPTION SECONDAIRE : SCAN VIDÉO EN DIRECT -->
+    <div class="secondary-option">
+      <button 
+        type="button" 
+        class="text-link-btn"
+        @click="toggleLiveScan"
+      >
+        {{ isLiveScanning ? '✖️ Fermer le scanner vidéo en direct' : '📹 Ou utiliser le scanner vidéo en direct' }}
+      </button>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .scanner-container {
   width: 100%;
-}
-
-.scanner-wrapper {
-  position: relative;
-  background: #0f172a;
-  border-radius: var(--radius-md);
-  padding: 0.6rem;
-  box-shadow: var(--shadow-md);
   margin-bottom: 0.5rem;
 }
 
-.scanner-toolbar {
+.hidden-file-input {
+  display: none;
+}
+
+/* Bouton principal moderne et attractif */
+.native-photo-btn {
+  width: 100%;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.tool-btn {
-  background: rgba(255, 255, 255, 0.15);
+  gap: 0.85rem;
+  padding: 0.85rem 1.1rem;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
   color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: var(--radius-md);
-  padding: 0.35rem 0.65rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
+  border: 1px solid #0284c7;
+  border-radius: var(--radius-md, 8px);
   cursor: pointer;
-  transition: all 0.2s;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  text-align: left;
 }
 
-.tool-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
+.native-photo-btn:hover {
+  background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 8px -1px rgba(0, 0, 0, 0.15);
 }
 
-.tool-btn.active {
-  background: #f59e0b;
-  color: #ffffff;
-  border-color: #f59e0b;
+.native-photo-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
 }
 
+.btn-icon {
+  font-size: 1.75rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.btn-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.btn-title {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.btn-sub {
+  font-size: 0.75rem;
+  color: #e0f2fe;
+  margin-top: 0.15rem;
+}
+
+/* Cartes de statut (analyse, succès, erreur) */
+.status-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md, 8px);
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.status-card.analyzing {
+  background-color: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0369a1;
+}
+
+.status-card.success {
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.status-card.error {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.status-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.status-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+}
+
+.retry-btn {
+  margin-top: 0.4rem;
+  align-self: flex-start;
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.retry-btn:hover {
+  background: #dc2626;
+}
+
+/* Spinner d'analyse */
+.spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2.5px solid #bae6fd;
+  border-top-color: #0284c7;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Aperçu miniature de la photo */
+.photo-preview-wrapper {
+  margin-top: 0.75rem;
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+  max-height: 140px;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+}
+
+.photo-preview-img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  opacity: 0.85;
+}
+
+/* Conteneur vidéo pour le scan continu */
 .scanner-viewport {
   width: 100%;
-  border-radius: var(--radius-md);
+  margin-top: 0.75rem;
+  border-radius: var(--radius-md, 8px);
   overflow: hidden;
   background: #000000;
-  position: relative;
-  touch-action: none; /* Crucial pour le pinch-to-zoom sans scroll parasite */
 }
 
 :deep(video) {
@@ -529,105 +585,23 @@ onBeforeUnmount(() => {
   display: block;
 }
 
-.zoom-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-top: 0.6rem;
-  padding: 0.5rem 0.75rem;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius-md);
-  color: #f8fafc;
-}
-
-.zoom-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.zoom-title {
-  font-size: 0.85rem;
-}
-
-.zoom-badge {
-  font-size: 0.65rem;
-  background: rgba(14, 165, 233, 0.3);
-  color: #38bdf8;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.zoom-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.zoom-presets {
-  display: flex;
-  gap: 0.25rem;
-}
-
-.zoom-chip {
-  background: rgba(255, 255, 255, 0.15);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 0.25rem 0.55rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.zoom-chip:hover {
-  background: rgba(255, 255, 255, 0.25);
-}
-
-.zoom-chip.active {
-  background: var(--primary-color, #0ea5e9);
-  border-color: var(--primary-color, #0ea5e9);
-  color: #ffffff;
-}
-
-.zoom-slider {
-  flex: 1;
-  accent-color: var(--primary-color, #0ea5e9);
-  cursor: pointer;
-  height: 6px;
-}
-
-.scanner-tip {
-  margin-top: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  background: rgba(14, 165, 233, 0.15);
-  border-left: 3px solid var(--primary-color, #0ea5e9);
-  border-radius: 4px;
-  color: #e0f2fe;
-  font-size: 0.75rem;
-  line-height: 1.35;
-}
-
-.scanner-error {
-  margin-top: 0.5rem;
-  padding: 0.5rem;
-  background: #fee2e2;
-  border: 1px solid #fca5a5;
-  color: #991b1b;
-  border-radius: var(--radius-md);
-  font-size: 0.85rem;
+/* Lien discret pour le mode continu */
+.secondary-option {
   text-align: center;
+  margin-top: 0.6rem;
 }
 
-.danger {
-  background-color: var(--danger, #ef4444);
-  color: white;
-  border-color: var(--danger, #ef4444);
+.text-link-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted, #64748b);
+  font-size: 0.8rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0.3rem 0.5rem;
 }
-.danger:hover {
-  background-color: #dc2626;
+
+.text-link-btn:hover {
+  color: var(--primary-color, #0ea5e9);
 }
 </style>
