@@ -4,6 +4,7 @@ import { useFormStore } from './stores/form'
 import BarcodeScanner from './components/BarcodeScanner.vue'
 import SignaturePad from './components/SignaturePad.vue'
 import DynamicForm from './components/DynamicForm.vue'
+import ChargeMaintenance from './components/ChargeMaintenance.vue'
 
 import { generatePDF } from './utils/pdfGenerator'
 import { subscribeUserToPush } from './utils/pushService'
@@ -17,7 +18,7 @@ const modes = [
   { id: 'standard', label: 'Standard' },
   { id: 'home', label: 'Domicile' },
   { id: 'sav', label: 'SAV' },
-  { id: 'charge', label: 'Maintient de charge' },
+  { id: 'charge', label: '⚡ Maintient de charge' },
 ]
 
 const isGenerating = ref(false)
@@ -123,7 +124,13 @@ const handlePushSubscription = async () => {
         <DraftsList @load-draft="currentTab = 'form'" />
       </div>
 
-      <div class="card" v-show="currentTab === 'form'">
+      <!-- Mode Maintien de charge dédié -->
+      <div v-show="currentTab === 'form' && store.currentMode === 'charge'">
+        <ChargeMaintenance />
+      </div>
+
+      <!-- Contrôles classiques (Standard, Domicile, SAV) -->
+      <div class="card" v-show="currentTab === 'form' && store.currentMode !== 'charge'">
         <div v-if="store.currentMode === 'home'">
           <div class="form-group">
             <label>Nom du patient</label>

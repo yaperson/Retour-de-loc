@@ -11,7 +11,7 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', 'push-sw.js'],
       manifest: {
         name: 'Contrôle Matériel Médical',
         short_name: 'Contrôle',
@@ -32,7 +32,8 @@ export default defineConfig({
       },
       workbox: {
         // Option pour garder une grande quantité de cache si nécessaire (ex: images)
-        maximumFileSizeToCacheInBytes: 5000000 
+        maximumFileSizeToCacheInBytes: 5000000,
+        importScripts: ['push-sw.js']
       }
     })
   ]
